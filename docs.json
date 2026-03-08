@@ -93,10 +93,12 @@
               "api/generators/fade",
               "api/generators/strobe",
               "api/generators/remap",
+              "api/generators/remap-on-demand",
               "api/generators/text",
               "api/generators/time",
               "api/generators/twitch-chat",
               "api/generators/dmx-packet",
+              "api/generators/ontime",
               "api/generators/subtitle-formats"
             ]
           },

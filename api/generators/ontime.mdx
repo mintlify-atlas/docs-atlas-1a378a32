@@ -1,0 +1,155 @@
+---
+title: 'OnTime'
+description: 'Display show control data from OnTime scheduling software'
+---
+
+## Overview
+
+The `OnTime` generator integrates with [OnTime](https://getontime.no/) show control software via HTTP polling. It fetches the current event data and displays it as text, and optionally writes event metadata to DMX channels.
+
+<Note>
+OnTime is a professional show control and scheduling application for events, theater, and broadcast.
+</Note>
+
+## Properties
+
+<ParamField path="dataPayloadChannelStart" type="DMXChannel" default="0">
+  Starting DMX channel for writing event metadata payload.
+</ParamField>
+
+Inherits all properties from the [Text Generator](/api/generators/text) including font, size, and color.
+
+## Implementation
+
+From ~/workspace/source/Assets/Plugin/Generators/OnTime/GeneratorOnTime.cs:27-40:
+
+```csharp
+public override void GenerateDMX(ref List<byte> dmxData)
+{
+    text = "";
+    var task = Task.Run(async () =>
+    {
+        var response = await _client.GetAsync("http://localhost:4001/api/poll");
+
+        //read as string
+        string responseString = await response.Content.ReadAsStringAsync();
+        return responseString;
+    });
+    task.Wait();
+    var response = task.Result;
+    Root data = JsonConvert.DeserializeObject<Root>(response);
+    // ... process event data
+}
+```
+
+## API Endpoint
+
+The generator polls `http://localhost:4001/api/poll` to retrieve current event information from the OnTime server.
+
+### Expected Response Format
+
+The OnTime API returns JSON data conforming to the `Root` schema defined in `OnTimeAPI.cs`:
+
+```json
+{
+  "event": {
+    "id": "event-123",
+    "title": "Opening Ceremony",
+    "timeStart": "2024-01-01T19:00:00Z",
+    "timeEnd": "2024-01-01T20:00:00Z",
+    "duration": 3600000
+  },
+  "playback": {
+    "state": "playing",
+    "currentTime": 1234567
+  }
+}
+```
+
+## Configuration Example
+
+```yaml
+generators:
+  - !OnTime
+    dataPayloadChannelStart: 400
+    # Text rendering settings (inherited from Text generator)
+```
+
+<Warning>
+The OnTime generator requires OnTime software to be running locally on port 4001. Ensure OnTime is configured to enable HTTP API access.
+</Warning>
+
+## Setup Requirements
+
+<Steps>
+  <Step title="Install OnTime">
+    Download and install OnTime from [getontime.no](https://getontime.no/)
+  </Step>
+  
+  <Step title="Enable API Access">
+    Configure OnTime to enable HTTP API on port 4001 (default)
+  </Step>
+  
+  <Step title="Configure HNode">
+    Add the OnTime generator to your show configuration
+  </Step>
+  
+  <Step title="Verify Connection">
+    Check HNode logs for successful API polling
+  </Step>
+</Steps>
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Event Display">
+    Show current event title and timing information in virtual worlds or on LED displays during live events.
+  </Accordion>
+  
+  <Accordion title="Show Control Integration">
+    Synchronize lighting cues with OnTime's scheduling system by reading event metadata.
+  </Accordion>
+  
+  <Accordion title="Countdown Timers">
+    Display time remaining until next event or time elapsed in current event.
+  </Accordion>
+  
+  <Accordion title="Metadata Routing">
+    Write event IDs or timestamps to DMX channels for consumption by other systems.
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Connection Failed">
+    **Error:** Cannot connect to OnTime API
+    
+    **Solutions:**
+    - Verify OnTime is running
+    - Check OnTime is listening on port 4001
+    - Ensure no firewall is blocking localhost connections
+    - Verify HTTP API is enabled in OnTime settings
+  </Accordion>
+  
+  <Accordion title="No Data Displayed">
+    **Error:** Generator runs but no text appears
+    
+    **Solutions:**
+    - Check OnTime has active events scheduled
+    - Verify JSON response format matches expected schema
+    - Check HNode console for deserialization errors
+    - Ensure text rendering settings are configured
+  </Accordion>
+</AccordionGroup>
+
+## Related
+
+- [Text Generator](/api/generators/text) - Base text rendering functionality
+- [Time Generator](/api/generators/time) - Display system time
+- [Subtitle Formats](/api/generators/subtitle-formats) - Display timed text from files
+
+## External Resources
+
+- [OnTime Official Website](https://getontime.no/)
+- [OnTime Documentation](https://docs.getontime.no/)

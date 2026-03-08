@@ -1,0 +1,148 @@
+---
+title: 'RemapOnDemand'
+description: 'Conditionally remap channels based on a toggle channel value'
+---
+
+## Overview
+
+The `RemapOnDemand` generator conditionally copies data from source channels to destination channels only when a toggle channel exceeds a threshold. This allows for dynamic channel routing controlled by a DMX value.
+
+## Properties
+
+<ParamField path="ToggleChannel" type="DMXChannel" default="0" required>
+  The DMX channel used to control whether remapping occurs.
+</ParamField>
+
+<ParamField path="RemapFromChannelStart" type="DMXChannel" default="0" required>
+  First source channel to read from.
+</ParamField>
+
+<ParamField path="RemapToChannelStart" type="DMXChannel" default="0" required>
+  First destination channel to write to.
+</ParamField>
+
+<ParamField path="RemapChannelLength" type="EquationNumber" default="0" required>
+  Number of channels to remap.
+</ParamField>
+
+<ParamField path="ActivationThreshold" type="EquationNumber" default="127">
+  Minimum value of toggle channel to activate remapping (0-255).
+</ParamField>
+
+## Implementation
+
+From ~/workspace/source/Assets/Plugin/Generators/GeneratorRemapOnDemand.cs:15-26:
+
+```csharp
+public void GenerateDMX(ref List<byte> dmxData)
+{
+    //ensure capacity
+    dmxData.EnsureCapacity(RemapToChannelStart + (int)RemapChannelLength);
+    dmxData.EnsureCapacity(RemapFromChannelStart + (int)RemapChannelLength);
+    dmxData.EnsureCapacity(ToggleChannel + 1);
+    
+    if (dmxData[ToggleChannel] > ActivationThreshold)
+    {
+        dmxData.WriteToListAtPosition(dmxData.GetRange(RemapFromChannelStart, RemapChannelLength), RemapToChannelStart);
+    }
+}
+```
+
+## Configuration Example
+
+```yaml
+generators:
+  # Remap channels 1-16 to 513-528 when channel 100 > 127
+  - !RemapOnDemand
+    ToggleChannel: 100
+    RemapFromChannelStart: 0
+    RemapToChannelStart: 512
+    RemapChannelLength: 16
+    ActivationThreshold: 127
+  
+  # Trigger remap with full brightness toggle
+  - !RemapOnDemand
+    ToggleChannel: 1.1
+    RemapFromChannelStart: 2.1
+    RemapToChannelStart: 3.1
+    RemapChannelLength: 64
+    ActivationThreshold: 200
+```
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Conditional Fixture Duplication">
+    Duplicate fixture control to a backup universe only when a master switch is enabled:
+    
+    ```yaml
+    - !RemapOnDemand
+      ToggleChannel: 500  # Master switch
+      RemapFromChannelStart: 1.1
+      RemapToChannelStart: 2.1
+      RemapChannelLength: 512
+      ActivationThreshold: 127
+    ```
+  </Accordion>
+  
+  <Accordion title="Scene Selector">
+    Route different source scenes to output based on a selector channel:
+    
+    ```yaml
+    # Scene A active when channel 1 < 85
+    - !RemapOnDemand
+      ToggleChannel: 1
+      RemapFromChannelStart: 100
+      RemapToChannelStart: 1.1
+      RemapChannelLength: 32
+      ActivationThreshold: 0
+    
+    # Scene B active when channel 1 >= 85
+    - !RemapOnDemand
+      ToggleChannel: 1
+      RemapFromChannelStart: 200
+      RemapToChannelStart: 1.1
+      RemapChannelLength: 32
+      ActivationThreshold: 85
+    ```
+  </Accordion>
+  
+  <Accordion title="Emergency Override">
+    Override normal programming with emergency lighting when triggered:
+    
+    ```yaml
+    - !RemapOnDemand
+      ToggleChannel: 511  # Emergency trigger
+      RemapFromChannelStart: 1000  # Pre-programmed emergency scene
+      RemapToChannelStart: 0
+      RemapChannelLength: 512
+      ActivationThreshold: 250
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Differences from Remap Generator
+
+<CardGroup cols={2}>
+  <Card title="Remap" icon="shuffle">
+    - **Always active** - copies data every frame
+    - Simpler configuration
+    - No conditional logic
+    - Good for static routing
+  </Card>
+  <Card title="RemapOnDemand" icon="toggle-on">
+    - **Conditionally active** - controlled by toggle channel
+    - More flexible
+    - Allows dynamic routing
+    - Good for switchable scenes
+  </Card>
+</CardGroup>
+
+<Tip>
+Use multiple RemapOnDemand generators with different threshold ranges on the same toggle channel to create a multi-position selector switch.
+</Tip>
+
+## Related
+
+- [Remap Generator](/api/generators/remap) - Always-active channel remapping
+- [Static Value Generator](/api/generators/static-value) - Set channels to fixed values
