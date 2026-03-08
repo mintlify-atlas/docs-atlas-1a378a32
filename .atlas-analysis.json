@@ -1,0 +1,149 @@
+{
+  "projectType": "frontend",
+  "projectName": "HNode",
+  "projectDescription": "Open source ArtNet DMX to video grid node renderer built in Unity 6 for maximum data standard flexibility",
+  "theme": "aspen",
+  "primaryColor": "#9333EA",
+  "lightColor": "#A855F7",
+  "darkColor": "#7C3AED",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/artnet-dmx",
+              "concepts/serializers",
+              "concepts/generators",
+              "concepts/exporters"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/obs-setup",
+              "guides/streaming",
+              "guides/show-configuration",
+              "guides/spout-io",
+              "guides/mididmx"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/artnet-settings",
+              "configuration/resolution",
+              "configuration/masking",
+              "configuration/transcoding"
+            ]
+          },
+          {
+            "group": "Troubleshooting",
+            "pages": [
+              "troubleshooting/common-issues",
+              "troubleshooting/faq"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Serializers",
+            "pages": [
+              "api/serializers/overview",
+              "api/serializers/vrsl",
+              "api/serializers/binary",
+              "api/serializers/binary-stage-flight",
+              "api/serializers/ternary",
+              "api/serializers/color-binary",
+              "api/serializers/spiral",
+              "api/serializers/furality-somna"
+            ]
+          },
+          {
+            "group": "Generators",
+            "pages": [
+              "api/generators/overview",
+              "api/generators/static-value",
+              "api/generators/fade",
+              "api/generators/strobe",
+              "api/generators/remap",
+              "api/generators/text",
+              "api/generators/time",
+              "api/generators/twitch-chat",
+              "api/generators/dmx-packet",
+              "api/generators/subtitle-formats"
+            ]
+          },
+          {
+            "group": "Exporters",
+            "pages": [
+              "api/exporters/overview",
+              "api/exporters/mididmx",
+              "api/exporters/text-file",
+              "api/exporters/timecode"
+            ]
+          },
+          {
+            "group": "Core Interfaces",
+            "pages": [
+              "api/interfaces/idmx-serializer",
+              "api/interfaces/idmx-generator",
+              "api/interfaces/iexporter"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "ArtNet DMX to video grid rendering",
+    "Spout2 input/output for OBS integration",
+    "Multiple serializer formats (VRSL, Binary Stage Flight, etc.)",
+    "DMX generators (fade, strobe, text, Twitch chat)",
+    "MIDIDMX export support",
+    "Show configuration system",
+    "Channel masking and transcoding",
+    "Real-time performance statistics"
+  ],
+  "publicApiSurface": [
+    "IDMXSerializer",
+    "IDMXGenerator",
+    "IExporter",
+    "VRSL",
+    "SerializerBinary",
+    "SerializerBinaryStageFlight",
+    "SerializerTernary",
+    "SerializerColorBinary",
+    "SerializerSpiral",
+    "SerializerFuralitySomna",
+    "GeneratorStaticValue",
+    "GeneratorFade",
+    "GeneratorStrobe",
+    "GeneratorRemap",
+    "GeneratorText",
+    "GeneratorTime",
+    "GeneratorTwitchChat",
+    "GeneratorDMXPacket",
+    "GeneratorASS",
+    "GeneratorLRC",
+    "GeneratorSRT",
+    "MIDIDMX",
+    "TextFileExporter",
+    "TimeCodeExporter",
+    "ShowConfiguration"
+  ]
+}
