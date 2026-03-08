@@ -1,0 +1,386 @@
+---
+title: 'Ternary Serializer'
+description: 'Base-3 encoding for experimental DMX serialization'
+---
+
+## Overview
+
+The Ternary serializer uses base-3 (ternary) encoding instead of binary, representing each DMX channel as 6 ternary digits. Each digit can have one of three values (0, 1, or 2), encoded as different intensity levels.
+
+## Class: Ternary
+
+**Namespace:** Global  
+**Implements:** `IDMXSerializer`
+
+### Configuration Constants
+
+<ResponseField name="blockSize" type="const int" default="4">
+  Size in pixels of each ternary digit block (4×4 pixels)
+</ResponseField>
+
+<ResponseField name="blocksPerCol" type="const int" default="48">
+  Number of digit blocks per column (8 × 6 = 48 blocks)
+</ResponseField>
+
+## How It Works
+
+### Ternary Representation
+
+Each byte value (0-255) is converted to 6 ternary digits:
+
+```csharp
+// Example: Value 170 in different bases
+Decimal:  170
+Binary:   10101010 (8 digits, base-2)
+Ternary:  20022 (6 digits, base-3, padded)
+
+// Ternary breakdown for 170:
+170 ÷ 3 = 56 remainder 2  → digit[5] = 2
+56 ÷ 3 = 18 remainder 2   → digit[4] = 2
+18 ÷ 3 = 6 remainder 0    → digit[3] = 0
+6 ÷ 3 = 2 remainder 0     → digit[2] = 0
+2 ÷ 3 = 0 remainder 2     → digit[1] = 2
+0 ÷ 3 = 0 remainder 0     → digit[0] = 0
+
+Result: [0, 2, 0, 0, 2, 2]
+```
+
+### Intensity Mapping
+
+Each ternary digit is encoded as a grayscale intensity:
+
+| Ternary Value | Intensity | RGB Value |
+|---------------|-----------|------------|
+| 0             | 0%        | (0, 0, 0)  |
+| 1             | 50%       | (127, 127, 127) |
+| 2             | 100%      | (255, 255, 255) |
+
+### Capacity
+
+Base-3 can represent larger values with fewer digits:
+- **Binary**: 2^8 = 256 values with 8 bits
+- **Ternary**: 3^6 = 729 values with 6 digits (only 0-255 used)
+
+This means 25% fewer blocks per channel compared to binary encoding.
+
+## Methods
+
+### SerializeChannel
+
+Encodes a DMX channel value as 6 ternary digit blocks.
+
+```csharp
+public void SerializeChannel(ref Color32[] pixels, byte channelValue, 
+    int channel, int textureWidth, int textureHeight)
+```
+
+<ParamField path="pixels" type="ref Color32[]" required>
+  The pixel array to write the encoded digits to
+</ParamField>
+
+<ParamField path="channelValue" type="byte" required>
+  The DMX channel value (0-255) to encode
+</ParamField>
+
+<ParamField path="channel" type="int" required>
+  The DMX channel number
+</ParamField>
+
+<ParamField path="textureWidth" type="int" required>
+  Width of the output texture
+</ParamField>
+
+<ParamField path="textureHeight" type="int" required>
+  Height of the output texture
+</ParamField>
+
+**Process:**
+1. Converts the channel value to 6 ternary digits
+2. For each digit:
+   - Maps ternary value (0, 1, 2) to intensity (0%, 50%, 100%)
+   - Calculates position based on `(channel * 6) + digitIndex`
+   - Creates a 4×4 grayscale block
+   - Writes the block to the pixel array
+3. Skips blocks that exceed texture bounds
+
+### convertToTernary
+
+Converts a byte value to a 6-digit ternary representation.
+
+```csharp
+public byte[] convertToTernary(byte N)
+```
+
+<ParamField path="N" type="byte" required>
+  The decimal value to convert (0-255)
+</ParamField>
+
+**Returns:** `byte[]` - Array of 6 bytes, each containing 0, 1, or 2
+
+**Algorithm:**
+```csharp
+byte[] bytes = new byte[6];
+int index = 5; // Start from least significant digit
+
+for (int i = 0; i < 6; i++)
+{
+    bytes[index--] = (byte)(N % 3);  // Get remainder
+    N /= 3;                          // Divide by 3
+}
+
+return bytes; // [most significant ... least significant]
+```
+
+### DeserializeChannel
+
+Decodes a DMX channel value from ternary digit blocks.
+
+```csharp
+public void DeserializeChannel(Texture2D tex, ref byte channelValue, 
+    int channel, int textureWidth, int textureHeight)
+```
+
+<Warning>
+  **Not Properly Implemented**: The deserialization currently uses binary decoding logic and does not correctly convert ternary digits back to byte values. This is a known limitation.
+</Warning>
+
+## Usage Example
+
+```csharp
+// Create ternary serializer
+var ternary = new Ternary();
+
+// Initialize pixel array
+int textureWidth = 256;
+int textureHeight = 256;
+Color32[] pixels = new Color32[textureWidth * textureHeight];
+
+// Test conversion
+byte testValue = 170;
+byte[] ternaryDigits = ternary.convertToTernary(testValue);
+Debug.Log($"Ternary representation of {testValue}: [{string.Join(", ", ternaryDigits)}]");
+// Output: "Ternary representation of 170: [0, 2, 0, 0, 2, 2]"
+
+// Encode channel
+ternary.SerializeChannel(ref pixels, 170, 0, textureWidth, textureHeight);
+
+// Visual result for channel 0, value 170:
+// Block 0: Black    (ternary 0)
+// Block 1: White    (ternary 2)
+// Block 2: Black    (ternary 0)
+// Block 3: Black    (ternary 0)
+// Block 4: White    (ternary 2)
+// Block 5: White    (ternary 2)
+```
+
+## Visual Pattern
+
+Ternary encoding produces distinct three-level patterns:
+
+```
+Value: 0 (ternary: [0,0,0,0,0,0])
+████████  All black
+
+Value: 255 (ternary: [0,2,2,1,0,0])
+████▓▓▓░  Mixed pattern
+  ^ ^ ^   
+  | | └── 0 = black
+  | └──── 1 = gray
+  └────── 2 = white
+
+Value: 121 (ternary: [0,1,1,1,1,1])
+██▓▓▓▓▓▓  Mostly gray
+```
+
+## Channel Capacity
+
+Since each channel uses 6 blocks instead of 8:
+
+```csharp
+int maxBlocksPerColumn = blocksPerCol; // 48
+int maxChannelsPerColumn = maxBlocksPerColumn / 6; // 8 channels
+int columns = textureWidth / blockSize;
+int totalChannels = maxChannelsPerColumn * columns;
+
+// Example: 256×256 texture
+// Columns: 256 / 4 = 64
+// Channels: 8 × 64 = 512 channels
+```
+
+### Capacity by Resolution
+
+| Resolution | Channels | vs Binary |
+|------------|----------|------------|
+| 128×128    | 128      | +23%       |
+| 256×256    | 512      | +23%       |
+| 512×512    | 2,048    | +23%       |
+| 1024×1024  | 8,192    | +23%       |
+
+## Advantages
+
+<CardGroup cols={2}>
+  <Card title="Higher Density" icon="chart-line">
+    25% more channels than binary (6 vs 8 blocks per channel)
+  </Card>
+  
+  <Card title="Three Levels" icon="layer-group">
+    Intermediate gray level provides smoother gradients
+  </Card>
+  
+  <Card title="Visual Distinction" icon="eye">
+    Three-level patterns are visually distinct from binary
+  </Card>
+  
+  <Card title="Efficient Encoding" icon="gauge-high">
+    3^6 = 729 possible values in 6 digits
+  </Card>
+</CardGroup>
+
+## Limitations
+
+<Warning>
+  **Incomplete Implementation**: Deserialization does not properly convert ternary back to binary. This serializer is currently **encode-only**.
+</Warning>
+
+- **No Working Decoder**: Cannot reliably receive ternary-encoded data
+- **Compression Sensitivity**: Middle gray level (127) may be distorted by video compression
+- **Threshold Complexity**: Requires two thresholds (0.33 and 0.66) instead of one
+- **Experimental**: Not widely tested or used in production
+
+## Decoding Considerations
+
+To properly implement ternary decoding:
+
+```csharp
+public byte DecodeTernary(byte[] ternaryDigits)
+{
+    // Convert ternary digits back to decimal
+    int result = 0;
+    int multiplier = 1;
+    
+    for (int i = 5; i >= 0; i--) // Start from least significant
+    {
+        result += ternaryDigits[i] * multiplier;
+        multiplier *= 3;
+    }
+    
+    return (byte)result;
+}
+
+// Read ternary digit from pixel intensity
+public byte ReadTernaryDigit(Color color)
+{
+    float intensity = color.r; // Assuming grayscale
+    
+    if (intensity < 0.33f) return 0;
+    if (intensity < 0.67f) return 1;
+    return 2;
+}
+```
+
+## Best Practices
+
+### 1. Video Quality
+
+Ternary encoding is more sensitive to compression than binary:
+
+```
+Required Settings:
+- Bitrate: >= 30 Mbps (higher than binary)
+- Compression: Near-lossless (CRF 12 or lower)
+- Color Space: RGB
+- Chroma Subsampling: 4:4:4
+```
+
+### 2. Testing
+
+Test the full range of values:
+
+```csharp
+// Test critical values
+byte[] testValues = { 0, 1, 2, 85, 127, 170, 254, 255 };
+
+foreach (byte value in testValues)
+{
+    byte[] ternary = ternary.convertToTernary(value);
+    Debug.Log($"{value} → [{string.Join(", ", ternary)}]");
+}
+```
+
+### 3. Visualization
+
+Create debug visualization to verify encoding:
+
+```csharp
+public void VisualizeChannel(byte channelValue)
+{
+    byte[] digits = convertToTernary(channelValue);
+    string visual = "";
+    
+    foreach (byte digit in digits)
+    {
+        visual += digit switch
+        {
+            0 => "█", // Black
+            1 => "▓", // Gray
+            2 => "░", // White
+            _ => "?"
+        };
+    }
+    
+    Debug.Log($"Channel {channelValue}: {visual}");
+}
+```
+
+## Mathematical Properties
+
+### Ternary Number System
+
+```
+Positional values (base-3):
+[d5] [d4] [d3] [d2] [d1] [d0]
+ 243  81   27   9    3    1
+
+Example: 170 in ternary
+= 0×243 + 2×81 + 0×27 + 0×9 + 2×3 + 2×1
+= 0 + 162 + 0 + 0 + 6 + 2
+= 170 ✓
+```
+
+### Value Ranges
+
+| Digits | Min | Max | Range |
+|--------|-----|-----|-------|
+| 1      | 0   | 2   | 3     |
+| 2      | 0   | 8   | 9     |
+| 3      | 0   | 26  | 27    |
+| 4      | 0   | 80  | 81    |
+| 5      | 0   | 242 | 243   |
+| 6      | 0   | 728 | 729   |
+
+Since DMX needs 0-255 (256 values), 6 ternary digits provide more than enough range.
+
+## Future Improvements
+
+<Info>
+  This serializer is experimental. Contributions to implement proper deserialization are welcome!
+</Info>
+
+Potential enhancements:
+1. Complete the `DeserializeChannel` implementation
+2. Add two-threshold decoding (0.33 and 0.67)
+3. Implement error correction for the middle gray level
+4. Add compression resistance testing
+5. Compare performance vs binary in real-world conditions
+
+## When to Use
+
+Ternary encoding is best suited for:
+- **Research and experimentation** with alternative encoding schemes
+- **Higher channel density** requirements where decoding is not needed
+- **Visualization** purposes where three levels provide better visual feedback
+- **One-way transmission** scenarios (encode-only)
+
+<Warning>
+  Do not use Ternary serializer for production applications requiring bidirectional communication until deserialization is properly implemented.
+</Warning>

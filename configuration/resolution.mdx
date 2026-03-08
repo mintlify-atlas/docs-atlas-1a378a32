@@ -1,0 +1,113 @@
+---
+title: 'Resolution'
+description: 'Configure input and output texture resolutions'
+---
+
+## Overview
+
+HNode processes DMX data as textures. The resolution settings control the dimensions of the input texture (deserializer) and output texture (serializer). These settings are critical for ensuring your pixel mapping matches your expected layout.
+
+## Configuration Properties
+
+<ParamField path="InputResolution" type="string" default="1920x1080">
+  The resolution of the input texture used by the deserializer. This determines how many pixels are available for receiving DMX data.
+
+  The format is `widthxheight` (e.g., `1920x1080`, `1280x720`, `3840x2160`).
+
+  **Common values:**
+  - `1920x1080` - Full HD (default)
+  - `1280x720` - HD
+  - `3840x2160` - 4K UHD
+  - `512x512` - Square format for specific pixel mappings
+  - Custom values based on your specific pixel layout
+</ParamField>
+
+<ParamField path="OutputResolution" type="string" default="1920x1080">
+  The resolution of the output texture used by the serializer. This determines the size of the texture that will be rendered and potentially sent to output systems.
+
+  The format is `widthxheight` (e.g., `1920x1080`, `1280x720`, `3840x2160`).
+
+  **Common values:**
+  - `1920x1080` - Full HD (default)
+  - `1280x720` - HD
+  - `3840x2160` - 4K UHD
+  - Match your projector or display resolution
+  - Match your LED wall pixel dimensions
+</ParamField>
+
+## YAML Configuration Example
+
+```yaml
+# Standard Full HD setup
+InputResolution: 1920x1080
+OutputResolution: 1920x1080
+```
+
+```yaml
+# 4K output with HD input
+InputResolution: 1280x720
+OutputResolution: 3840x2160
+```
+
+```yaml
+# Square pixel mapping
+InputResolution: 512x512
+OutputResolution: 512x512
+```
+
+```yaml
+# LED wall with custom dimensions
+InputResolution: 1920x1080
+OutputResolution: 1024x768
+```
+
+## Resolution Format
+
+Resolutions are specified as strings in the format `widthxheight`:
+
+- Width and height must be positive integers
+- Use the lowercase `x` character as the separator
+- No spaces or other characters
+
+**Valid examples:**
+- ✅ `1920x1080`
+- ✅ `512x512`
+- ✅ `3840x2160`
+
+**Invalid examples:**
+- ❌ `1920X1080` (uppercase X)
+- ❌ `1920 x 1080` (spaces)
+- ❌ `1920*1080` (wrong separator)
+- ❌ `1920,1080` (comma instead of x)
+
+## Choosing the Right Resolution
+
+### Input Resolution
+
+Your input resolution should match:
+- The pixel mapping format used by your deserializer
+- The number of DMX universes you're receiving
+- The layout of your LED fixtures
+
+For example, if you're using a serializer that maps 3 universes (512 channels × 3 = 1536 channels) and each pixel uses 3 channels (RGB), you have 512 pixels. You might choose a resolution of `512x1` or `32x16` or `16x32` depending on your fixture layout.
+
+### Output Resolution
+
+Your output resolution should match:
+- Your display device (projector, LED wall, etc.)
+- The input requirements of downstream systems
+- The aspect ratio of your content
+
+### Performance Considerations
+
+Higher resolutions require more processing power:
+- **1920x1080** = 2,073,600 pixels
+- **3840x2160** = 8,294,400 pixels (4x more processing)
+
+Choose the lowest resolution that meets your needs for optimal performance.
+
+## Related Settings
+
+- [Art-Net Settings](/configuration/artnet-settings) - Configure Art-Net network settings
+- [Transcoding](/configuration/transcoding) - Convert between different pixel mapping formats
+- [Masking](/configuration/masking) - Mask specific DMX channels

@@ -1,0 +1,278 @@
+---
+title: IDMXSerializer
+description: Interface for serializing and deserializing DMX channel data to and from video textures
+---
+
+## Overview
+
+`IDMXSerializer` is the core interface for implementing custom DMX serialization strategies. Serializers convert raw DMX byte values into visual representations (pixels) and vice versa, enabling DMX data to be encoded into video streams.
+
+## When to Implement
+
+Implement `IDMXSerializer` when you need to:
+
+- Create a custom encoding scheme for DMX data in video frames
+- Define how channel values map to pixel colors and positions
+- Implement error correction or checksums for your data encoding
+- Support specific hardware or protocol requirements for video-based DMX transmission
+
+## Interface Definition
+
+```csharp
+public interface IDMXSerializer : IUserInterface<IDMXGenerator>, IConstructable
+{
+    void SerializeChannel(ref Color32[] pixels, byte channelValue, int channel, int textureWidth, int textureHeight);
+    void DeserializeChannel(Texture2D tex, ref byte channelValue, int channel, int textureWidth, int textureHeight);
+    void InitFrame(ref List<byte> channelValues);
+    void CompleteFrame(ref Color32[] pixels, ref List<byte> channelValues, int textureWidth, int textureHeight);
+}
+```
+
+## Methods
+
+### SerializeChannel
+
+Serializes a single DMX channel from a raw byte value to pixel data in the output video stream.
+
+<ParamField path="pixels" type="ref Color32[]" required>
+  The pixel array representing the video frame texture. Modify this array to encode the channel value.
+</ParamField>
+
+<ParamField path="channelValue" type="byte" required>
+  The DMX channel value (0-255) to serialize into the video frame.
+</ParamField>
+
+<ParamField path="channel" type="int" required>
+  The channel index being serialized. Use this to determine pixel position/layout.
+</ParamField>
+
+<ParamField path="textureWidth" type="int" required>
+  The width of the output texture in pixels.
+</ParamField>
+
+<ParamField path="textureHeight" type="int" required>
+  The height of the output texture in pixels.
+</ParamField>
+
+```csharp
+public void SerializeChannel(ref Color32[] pixels, byte channelValue, int channel, int textureWidth, int textureHeight)
+{
+    // Split the value into 8 bits
+    var bits = new BitArray(new byte[] { channelValue });
+
+    for (int i = 0; i < bits.Length; i++)
+    {
+        GetPositionData(channel, i, out int x, out int y);
+        if (x >= textureWidth || y >= textureHeight)
+        {
+            continue; // Skip if out of bounds
+        }
+
+        var color = new Color32(
+            (byte)(bits[i] ? 255 : 0),
+            (byte)(bits[i] ? 255 : 0),
+            (byte)(bits[i] ? 255 : 0),
+            255
+        );
+        
+        // Write color to 4x4 block
+        TextureWriter.MakeColorBlock(ref pixels, x, y, color, 4);
+    }
+}
+```
+
+### DeserializeChannel
+
+Deserializes a single DMX channel from pixel data in the input video stream to a raw byte value.
+
+<ParamField path="tex" type="Texture2D" required>
+  The input texture containing encoded DMX data.
+</ParamField>
+
+<ParamField path="channelValue" type="ref byte" required>
+  Output parameter where the deserialized channel value will be stored.
+</ParamField>
+
+<ParamField path="channel" type="int" required>
+  The channel index being deserialized. Use this to determine which pixels to read.
+</ParamField>
+
+<ParamField path="textureWidth" type="int" required>
+  The width of the input texture in pixels.
+</ParamField>
+
+<ParamField path="textureHeight" type="int" required>
+  The height of the input texture in pixels.
+</ParamField>
+
+```csharp
+public void DeserializeChannel(Texture2D tex, ref byte channelValue, int channel, int textureWidth, int textureHeight)
+{
+    var bits = new BitArray(8);
+    for (int i = 0; i < bits.Length; i++)
+    {
+        GetPositionData(channel, i, out int x, out int y);
+        x += 1; // Offset to read center of block
+        y += 1;
+        
+        if (x >= textureWidth || y >= textureHeight)
+        {
+            continue;
+        }
+        
+        bits[i] = TextureReader.GetColor(tex, x, y).r > 0.5f;
+    }
+    
+    // Convert BitArray back to byte
+    byte[] bytes = new byte[1];
+    bits.CopyTo(bytes, 0);
+    channelValue = bytes[0];
+}
+```
+
+### InitFrame
+
+Called at the start of each frame to reset any internal state. Use this to prepare for a new frame of serialization.
+
+<ParamField path="channelValues" type="ref List<byte>" required>
+  The list of all channel values for the current frame. Can be used for preprocessing.
+</ParamField>
+
+```csharp
+public void InitFrame(ref List<byte> channelValues)
+{
+    // Reset any frame-specific state
+    // This is called before SerializeChannel is called for each channel
+}
+```
+
+### CompleteFrame
+
+Called after all channels have been serialized for the current frame. Use this for post-processing operations that need access to all channel data.
+
+<ParamField path="pixels" type="ref Color32[]" required>
+  The complete pixel array for the frame. Can be modified to add checksums, headers, or other metadata.
+</ParamField>
+
+<ParamField path="channelValues" type="ref List<byte>" required>
+  The complete list of all channel values that were serialized.
+</ParamField>
+
+<ParamField path="textureWidth" type="int" required>
+  The width of the texture in pixels.
+</ParamField>
+
+<ParamField path="textureHeight" type="int" required>
+  The height of the texture in pixels.
+</ParamField>
+
+```csharp
+public void CompleteFrame(ref Color32[] pixels, ref List<byte> channelValues, int textureWidth, int textureHeight)
+{
+    // Add CRC block, synchronization markers, or other frame-level data
+    // This is called after all channels have been serialized
+}
+```
+
+## Complete Implementation Example
+
+Here's a complete implementation of a binary serializer that encodes each byte as 8 pixel blocks:
+
+```csharp
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class BinarySerializer : IDMXSerializer
+{
+    const int blockSize = 4; // 4x4 pixels per bit
+    const int blocksPerCol = 52; // Bits per column
+
+    public void Construct() { }
+    public void Deconstruct() { }
+
+    public void InitFrame(ref List<byte> channelValues) 
+    {
+        // Optional: Initialize frame-specific state
+    }
+
+    public void CompleteFrame(ref Color32[] pixels, ref List<byte> channelValues, int textureWidth, int textureHeight) 
+    {
+        // Optional: Add frame markers or checksums
+    }
+
+    public void SerializeChannel(ref Color32[] pixels, byte channelValue, int channel, int textureWidth, int textureHeight)
+    {
+        var bits = new BitArray(new byte[] { channelValue });
+
+        for (int i = 0; i < bits.Length; i++)
+        {
+            GetPositionData(channel, i, out int x, out int y);
+            if (x >= textureWidth || y >= textureHeight) continue;
+
+            var color = new Color32(
+                (byte)(bits[i] ? 255 : 0),
+                (byte)(bits[i] ? 255 : 0),
+                (byte)(bits[i] ? 255 : 0),
+                255
+            );
+            TextureWriter.MakeColorBlock(ref pixels, x, y, color, blockSize);
+        }
+    }
+
+    public void DeserializeChannel(Texture2D tex, ref byte channelValue, int channel, int textureWidth, int textureHeight)
+    {
+        var bits = new BitArray(8);
+        for (int i = 0; i < bits.Length; i++)
+        {
+            GetPositionData(channel, i, out int x, out int y);
+            x += 1; // Sample center of block
+            y += 1;
+            
+            if (x >= textureWidth || y >= textureHeight) continue;
+            bits[i] = TextureReader.GetColor(tex, x, y).r > 0.5f;
+        }
+
+        byte[] bytes = new byte[1];
+        bits.CopyTo(bytes, 0);
+        channelValue = bytes[0];
+    }
+
+    private void GetPositionData(int channel, int bitIndex, out int x, out int y)
+    {
+        int block = (channel * 8) + bitIndex;
+        x = (block / blocksPerCol) * blockSize;
+        y = (block % blocksPerCol) * blockSize;
+    }
+
+    // IUserInterface implementation
+    public void ConstructUserInterface(RectTransform rect) { }
+    public void DeconstructUserInterface() { }
+    public void UpdateUserInterface() { }
+}
+```
+
+## Inherited Interfaces
+
+### IUserInterface\<IDMXGenerator\>
+
+Serializers can provide custom UI elements for configuration through methods like `ConstructUserInterface()`, `DeconstructUserInterface()`, and `UpdateUserInterface()`.
+
+### IConstructable
+
+Serializers must implement lifecycle methods `Construct()` and `Deconstruct()` for resource management and initialization.
+
+## Best Practices
+
+1. **Bounds Checking**: Always validate that calculated pixel positions are within texture bounds
+2. **Consistent Layout**: Use deterministic position calculations so serialization and deserialization match
+3. **Error Tolerance**: Consider adding redundancy or error correction in `CompleteFrame()`
+4. **Performance**: Minimize allocations in per-channel methods as they're called frequently
+5. **Visual Debugging**: Use alpha channels or specific colors to make encoded data visually distinguishable
+
+## See Also
+
+- [IDMXGenerator](/api/interfaces/idmx-generator) - Generate DMX channel data
+- [IExporter](/api/interfaces/iexporter) - Export DMX data to external formats
+- [Serializers Concept](/concepts/serializers) - Understanding the serializer system

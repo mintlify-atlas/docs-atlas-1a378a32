@@ -1,122 +1,124 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "HNode",
+  "theme": "aspen",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#9333EA",
+    "light": "#A855F7",
+    "dark": "#7C3AED"
   },
-  "favicon": "/favicon.svg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/Happyrobot33/HNode"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/Happyrobot33/HNode"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
-              "index",
-              "quickstart",
-              "development"
+              "introduction",
+              "installation",
+              "quickstart"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Core Concepts",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "concepts/architecture",
+              "concepts/artnet-dmx",
+              "concepts/serializers",
+              "concepts/generators",
+              "concepts/exporters"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Guides",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "guides/obs-setup",
+              "guides/streaming",
+              "guides/show-configuration",
+              "guides/spout-io",
+              "guides/mididmx"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Configuration",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "configuration/artnet-settings",
+              "configuration/resolution",
+              "configuration/masking",
+              "configuration/transcoding"
+            ]
+          },
+          {
+            "group": "Troubleshooting",
+            "pages": [
+              "troubleshooting/common-issues",
+              "troubleshooting/faq"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Serializers",
             "pages": [
-              "api-reference/introduction"
+              "api/serializers/overview",
+              "api/serializers/vrsl",
+              "api/serializers/binary",
+              "api/serializers/binary-stage-flight",
+              "api/serializers/ternary",
+              "api/serializers/color-binary",
+              "api/serializers/spiral",
+              "api/serializers/furality-somna"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Generators",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/generators/overview",
+              "api/generators/static-value",
+              "api/generators/fade",
+              "api/generators/strobe",
+              "api/generators/remap",
+              "api/generators/text",
+              "api/generators/time",
+              "api/generators/twitch-chat",
+              "api/generators/dmx-packet",
+              "api/generators/subtitle-formats"
+            ]
+          },
+          {
+            "group": "Exporters",
+            "pages": [
+              "api/exporters/overview",
+              "api/exporters/mididmx",
+              "api/exporters/text-file",
+              "api/exporters/timecode"
+            ]
+          },
+          {
+            "group": "Core Interfaces",
+            "pages": [
+              "api/interfaces/idmx-serializer",
+              "api/interfaces/idmx-generator",
+              "api/interfaces/iexporter"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

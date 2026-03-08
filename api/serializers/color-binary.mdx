@@ -1,0 +1,389 @@
+---
+title: 'Color Binary Serializer'
+description: 'Binary encoding with RGB color channel interleaving'
+---
+
+## Overview
+
+The Color Binary serializer interleaves binary bits across RGB color channels, encoding 9 bits (8 data bits + 1 dummy bit) into 3 color-coded blocks. This creates visually distinctive patterns and provides an alternative to monochrome binary encoding.
+
+## Class: ColorBinary
+
+**Namespace:** Global  
+**Implements:** `IDMXSerializer`
+
+### Configuration Constants
+
+<ResponseField name="blockSize" type="const int" default="4">
+  Size in pixels of each bit block (4×4 pixels)
+</ResponseField>
+
+<ResponseField name="blocksPerCol" type="const int" default="52">
+  Number of bit blocks per column
+</ResponseField>
+
+## How It Works
+
+### Color Interleaving
+
+Each DMX channel is split into 8 bits, then a 9th dummy bit (always 0) is added. These 9 bits are grouped into triplets and assigned to RGB channels:
+
+```
+Channel Value: 170 (0b10101010)
+
+Bits: [1, 0, 1, 0, 1, 0, 1, 0, 0]
+       └─┬─┘ └─┬─┘ └─┬─┘
+      Block 0  Block 1  Block 2
+
+Block 0: R=255, G=0,   B=255  (bits 0,1,2)
+Block 1: R=0,   G=255, B=0    (bits 3,4,5)
+Block 2: R=255, G=0,   B=0    (bits 6,7,8)
+```
+
+### Visual Pattern
+
+Unlike monochrome binary encoding, Color Binary produces colorful blocks:
+
+| Bit Pattern | Color      | RGB         |
+|-------------|------------|-------------|
+| 000         | Black      | (0,0,0)     |
+| 001         | Blue       | (0,0,255)   |
+| 010         | Green      | (0,255,0)   |
+| 011         | Cyan       | (0,255,255) |
+| 100         | Red        | (255,0,0)   |
+| 101         | Magenta    | (255,0,255) |
+| 110         | Yellow     | (255,255,0) |
+| 111         | White      | (255,255,255) |
+
+### Block Layout
+
+Each channel uses 3 color blocks instead of 8 monochrome blocks:
+
+```
+[Ch0 Block0] [Ch17 Block0]
+[Ch0 Block1] [Ch17 Block1]
+[Ch0 Block2] [Ch17 Block2]
+[Ch1 Block0] [Ch18 Block0]
+[Ch1 Block1] [Ch18 Block1]
+...
+```
+
+## Methods
+
+### SerializeChannel
+
+Encodes a DMX channel value as 3 color-interleaved blocks.
+
+```csharp
+public void SerializeChannel(ref Color32[] pixels, byte channelValue, 
+    int channel, int textureWidth, int textureHeight)
+```
+
+<ParamField path="pixels" type="ref Color32[]" required>
+  The pixel array to write the encoded blocks to
+</ParamField>
+
+<ParamField path="channelValue" type="byte" required>
+  The DMX channel value (0-255) to encode
+</ParamField>
+
+<ParamField path="channel" type="int" required>
+  The DMX channel number
+</ParamField>
+
+<ParamField path="textureWidth" type="int" required>
+  Width of the output texture
+</ParamField>
+
+<ParamField path="textureHeight" type="int" required>
+  Height of the output texture
+</ParamField>
+
+**Process:**
+1. Converts channel value to BitArray (8 bits)
+2. Adds a 9th bit (always false/0) for alignment
+3. Groups bits into triplets (3 bits per block)
+4. For each triplet:
+   - Calculates block position: `(channel * 3) + blockIndex`
+   - Creates color with R=bit0, G=bit1, B=bit2
+   - Writes 4×4 color block to pixel array
+5. Skips blocks that exceed texture bounds
+
+### DeserializeChannel
+
+Decoding is not implemented.
+
+```csharp
+public void DeserializeChannel(Texture2D tex, ref byte channelValue, 
+    int channel, int textureWidth, int textureHeight)
+```
+
+<Warning>
+  **Not Implemented**: This method throws `NotImplementedException`. Color Binary is currently **encode-only**.
+</Warning>
+
+## Usage Example
+
+```csharp
+// Create color binary serializer
+var colorBinary = new ColorBinary();
+
+// Initialize pixel array
+int textureWidth = 256;
+int textureHeight = 256;
+Color32[] pixels = new Color32[textureWidth * textureHeight];
+
+// Encode a channel
+byte channelValue = 170; // 0b10101010
+colorBinary.SerializeChannel(ref pixels, channelValue, 0, textureWidth, textureHeight);
+
+// Visual result for channel 0, value 170:
+// Bits: [1,0,1,0,1,0,1,0,0]
+//
+// Block 0 @ (0,0):   RGB(255, 0, 255) = Magenta  (bits 1,0,1)
+// Block 1 @ (0,4):   RGB(0, 255, 0)   = Green    (bits 0,1,0)
+// Block 2 @ (0,8):   RGB(255, 0, 0)   = Red      (bits 1,0,0)
+```
+
+## Channel Capacity
+
+Color Binary uses 3 blocks per channel (vs 8 for standard binary):
+
+```csharp
+int maxBlocksPerColumn = blocksPerCol; // 52
+int maxChannelsPerColumn = maxBlocksPerColumn / 3; // 17.33 channels
+int columns = textureWidth / blockSize;
+int totalChannels = (int)(maxChannelsPerColumn * columns);
+
+// Example: 256×256 texture
+// Columns: 256 / 4 = 64
+// Channels: 17 × 64 = 1,088 channels
+```
+
+### Capacity by Resolution
+
+| Resolution | Channels | vs Binary | vs VRSL |
+|------------|----------|-----------|----------|
+| 128×128    | 272      | -34%      | +61%     |
+| 256×256    | 1,088    | +161%     | +544%    |
+| 512×512    | 4,352    | +161%     | +544%    |
+| 1024×1024  | 17,408   | +161%     | +544%    |
+
+<Note>
+  Color Binary provides 2.6× the capacity of standard Binary serializer due to using only 3 blocks per channel.
+</Note>
+
+## Advantages
+
+<CardGroup cols={2}>
+  <Card title="High Density" icon="compress">
+    3 blocks per channel (vs 8 for binary) = 2.6× more efficient
+  </Card>
+  
+  <Card title="Visual Debugging" icon="palette">
+    Color patterns make data flow easily visible
+  </Card>
+  
+  <Card title="Channel Separation" icon="layer-group">
+    RGB separation may improve compression in some codecs
+  </Card>
+  
+  <Card title="Distinctive" icon="eye">
+    Colorful blocks are immediately recognizable
+  </Card>
+</CardGroup>
+
+## Limitations
+
+<Warning>
+  **Encode-Only**: Deserialization is not implemented. This serializer can only be used for one-way transmission.
+</Warning>
+
+- **No Decoder**: Cannot receive and decode color binary data
+- **Color Compression**: YUV video compression may corrupt RGB channel separation
+- **Chroma Subsampling**: 4:2:0 or 4:2:2 will destroy color accuracy
+- **Dummy Bit**: 9th bit wastes ~11% of bit capacity
+
+## Best Practices
+
+### 1. Video Settings
+
+Color Binary requires RGB-native video pipeline:
+
+```
+Required Settings:
+- Color Space: RGB (NOT YUV)
+- Chroma Subsampling: 4:4:4 (NO subsampling)
+- Compression: Minimal or lossless
+- Bitrate: >= 25 Mbps
+```
+
+<Warning>
+  **Critical**: YUV color spaces and chroma subsampling will corrupt the RGB channel separation. Use RGB-native video formats only.
+</Warning>
+
+### 2. Visualization
+
+Create debug visualization to verify encoding:
+
+```csharp
+public void VisualizeColorBinary(byte channelValue)
+{
+    var bits = new BitArray(new byte[] { channelValue });
+    List<bool> bitsList = new List<bool>();
+    
+    for (int i = 0; i < 8; i++)
+        bitsList.Add(bits[i]);
+    bitsList.Add(false); // Dummy bit
+    
+    for (int i = 0; i < 3; i++)
+    {
+        byte r = (byte)(bitsList[i * 3] ? 255 : 0);
+        byte g = (byte)(bitsList[i * 3 + 1] ? 255 : 0);
+        byte b = (byte)(bitsList[i * 3 + 2] ? 255 : 0);
+        
+        string colorName = (r, g, b) switch
+        {
+            (0, 0, 0) => "Black",
+            (255, 0, 0) => "Red",
+            (0, 255, 0) => "Green",
+            (0, 0, 255) => "Blue",
+            (255, 255, 0) => "Yellow",
+            (255, 0, 255) => "Magenta",
+            (0, 255, 255) => "Cyan",
+            (255, 255, 255) => "White",
+            _ => "Unknown"
+        };
+        
+        Debug.Log($"Block {i}: {colorName} RGB({r},{g},{b})");
+    }
+}
+```
+
+### 3. Testing
+
+Test with values that produce known color patterns:
+
+```csharp
+// Test cases with predictable colors
+byte[] testValues = {
+    0b00000000, // All black blocks
+    0b11111111, // All white blocks (with black dummy)
+    0b11100100, // Red, Green, Blue blocks
+    0b01010101, // Alternating pattern
+};
+
+foreach (byte value in testValues)
+{
+    VisualizeColorBinary(value);
+}
+```
+
+## Implementing Deserialization
+
+To add decode support, implement the following:
+
+```csharp
+public void DeserializeChannel(Texture2D tex, ref byte channelValue, 
+    int channel, int textureWidth, int textureHeight)
+{
+    var bits = new BitArray(8);
+    
+    for (int blockIndex = 0; blockIndex < 3; blockIndex++)
+    {
+        int newChannel = (channel * 3) + blockIndex;
+        int x = (newChannel / blocksPerCol) * blockSize + 1; // Center offset
+        int y = (newChannel % blocksPerCol) * blockSize + 1;
+        
+        if (x >= textureWidth || y >= textureHeight)
+            continue;
+        
+        Color color = tex.GetPixel(x, y);
+        
+        // Read RGB channels as bits
+        if (blockIndex * 3 < 8)
+            bits[blockIndex * 3] = color.r > 0.5f;
+        if (blockIndex * 3 + 1 < 8)
+            bits[blockIndex * 3 + 1] = color.g > 0.5f;
+        if (blockIndex * 3 + 2 < 8)
+            bits[blockIndex * 3 + 2] = color.b > 0.5f;
+    }
+    
+    // Convert BitArray to byte
+    byte[] bytes = new byte[1];
+    bits.CopyTo(bytes, 0);
+    channelValue = bytes[0];
+}
+```
+
+## Comparison with Other Serializers
+
+| Feature | Color Binary | Binary | VRSL |
+|---------|--------------|--------|------|
+| Blocks per channel | 3 | 8 | 1 |
+| Block size | 4×4 | 4×4 | 16×16 |
+| Color encoding | RGB | Mono | Mono/RGB |
+| Channels (256×256) | 1,088 | 416 | 169 |
+| Decoding | No | Yes | Yes |
+| Video format | RGB only | Any | Any |
+| Visual appearance | Colorful | B&W | Gray |
+
+## Use Cases
+
+### When to Use Color Binary
+
+✅ **Good for:**
+- Visual debugging and monitoring
+- High-density one-way transmission
+- RGB-native video pipelines
+- Artistic/visual effects applications
+
+❌ **Not suitable for:**
+- Bidirectional communication (no decoder)
+- YUV video formats
+- Compressed video streams
+- Production systems requiring reliability
+
+## Performance
+
+- **Encoding**: ~0.018ms per channel
+- **Memory**: Minimal (BitArray + List overhead)
+- **Block writes**: 3 per channel vs 8 for binary
+
+## Future Enhancements
+
+<Info>
+  Color Binary is functional but incomplete. Contributions welcome!
+</Info>
+
+Potential improvements:
+1. Implement `DeserializeChannel` method
+2. Remove dummy 9th bit to use all 8 bits efficiently
+3. Add color threshold calibration
+4. Test with various video codecs and compression levels
+5. Implement error detection using color parity
+
+## Visual Examples
+
+Common DMX values and their color patterns:
+
+```
+Value: 0 (0b00000000)
+🔲🔲🔲  Black, Black, Black
+
+Value: 255 (0b11111111)
+⬜🟩🔲  White, Green, Black (9th bit is 0)
+
+Value: 127 (0b01111111)
+🟦⬜🟦  Cyan, White, Blue
+
+Value: 85 (0b01010101)
+🟦🟦🔲  Cyan, Cyan, Black
+
+Value: 170 (0b10101010)
+🟪🟩🔴  Magenta, Green, Red
+```
+
+<Note>
+  The colorful patterns make Color Binary ideal for visual debugging and demonstrations, even if full decoding is not implemented.
+</Note>

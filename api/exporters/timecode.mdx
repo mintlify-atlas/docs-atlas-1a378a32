@@ -1,0 +1,251 @@
+---
+title: 'TimeCodeExporter'
+description: 'Receive MIDI timecode and broadcast via UDP for synchronization'
+---
+
+## Overview
+
+The TimeCodeExporter receives MIDI Time Code (MTC) from external sources and broadcasts it via UDP to multiple ports. This enables time-based synchronization between HNode and other systems like lighting consoles, media servers, or show control software.
+
+## Configuration
+
+<ParamField path="midiDevice" type="string" default="loopMIDI Port">
+  The name of the MIDI input device to receive timecode from. Must match the exact device name as it appears in the system.
+</ParamField>
+
+## YAML Example
+
+```yaml
+exporters:
+  - type: TimeCodeExporter
+    midiDevice: "loopMIDI Port"
+```
+
+## UDP Broadcast
+
+The exporter automatically broadcasts timecode data to multiple UDP ports on localhost (127.0.0.1):
+
+- Port 7001
+- Port 7002
+- Port 7003
+- Port 7004
+- Port 7005
+
+This allows multiple applications to receive the same timecode simultaneously.
+
+## Data Format
+
+Each UDP packet contains 13 bytes:
+
+### Packet Structure
+
+<ResponseField name="Bytes 0-3" type="int (big-endian)">
+  Timecode in UTC milliseconds (hours, minutes, seconds converted to total milliseconds)
+</ResponseField>
+
+<ResponseField name="Byte 4" type="byte">
+  Frame number (0-29 depending on framerate)
+</ResponseField>
+
+<ResponseField name="Bytes 5-12" type="ulong (big-endian)">
+  Current system UTC time in milliseconds since Unix epoch
+</ResponseField>
+
+### Example Packet Parsing
+
+```csharp
+// C# example: Parse timecode UDP packet
+byte[] packet = udpClient.Receive(ref endpoint);
+
+if (packet.Length == 13)
+{
+    // Convert big-endian bytes to integers
+    int timecodeMillis = IPAddress.NetworkToHostOrder(
+        BitConverter.ToInt32(packet, 0));
+    
+    byte frames = packet[4];
+    
+    ulong systemTimeMillis = (ulong)IPAddress.NetworkToHostOrder(
+        BitConverter.ToInt64(packet, 5));
+    
+    TimeSpan timecode = TimeSpan.FromMilliseconds(timecodeMillis);
+    Console.WriteLine($"{timecode:hh\\:mm\\:ss}:{frames}");
+}
+```
+
+```python
+# Python example: Parse timecode UDP packet
+import socket
+import struct
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.bind(('127.0.0.1', 7001))
+
+while True:
+    data, addr = sock.recvfrom(1024)
+    if len(data) == 13:
+        # Unpack big-endian integers
+        timecode_ms, frames, system_time = struct.unpack(
+            '>IbQ', data)
+        
+        hours = timecode_ms // 3600000
+        minutes = (timecode_ms % 3600000) // 60000
+        seconds = (timecode_ms % 60000) // 1000
+        
+        print(f"{hours:02d}:{minutes:02d}:{seconds:02d}:{frames:02d}")
+```
+
+## Supported Timecode Formats
+
+The exporter supports all standard SMPTE/MTC framerates:
+
+<ParamField path="24 fps" type="MidiTimeCodeType.TwentyFour">
+  Film standard (24 frames per second)
+</ParamField>
+
+<ParamField path="25 fps" type="MidiTimeCodeType.TwentyFive">
+  PAL video standard (25 frames per second)
+</ParamField>
+
+<ParamField path="29.97 fps" type="MidiTimeCodeType.ThirtyDrop">
+  NTSC drop-frame (29.97 frames per second)
+</ParamField>
+
+<ParamField path="30 fps" type="MidiTimeCodeType.Thirty">
+  NTSC non-drop (30 frames per second)
+</ParamField>
+
+## MIDI Timecode Types
+
+The exporter handles two types of MIDI timecode:
+
+### Quarter Frame Messages
+
+Standard MTC quarter frame messages that send timecode incrementally. The exporter reconstructs the full timecode from these messages.
+
+### Full Frame SysEx
+
+Full frame timecode sent as a System Exclusive message:
+```
+F0 7F 7F 01 01 hh mm ss ff F7
+```
+
+Where:
+- `hh` = hours (lower 5 bits) + framerate (upper 3 bits)
+- `mm` = minutes
+- `ss` = seconds  
+- `ff` = frames
+
+## Technical Implementation
+
+```csharp
+public class TimeCodeExporter : IExporter
+{
+    public string midiDevice = "loopMIDI Port";
+    
+    private InputDevice midiInput;
+    private List<UdpClient> udpClients = new List<UdpClient>();
+    private int[] ports = new int[] { 7001, 7002, 7003, 7004, 7005 };
+    
+    public void InitFrame(ref List<byte> channelValues)
+    {
+        // Sends UDP packet at start of each frame
+        // Minimizes latency for receivers
+    }
+}
+```
+
+## User Interface
+
+The exporter provides UI controls:
+
+<ParamField path="MIDI Device" type="Input Field">
+  Text input to specify the MIDI input device name. Must match system device name exactly.
+</ParamField>
+
+<ParamField path="Reconnect MIDI Device" type="Button">
+  Manually reconnect to the MIDI device. Useful if the device was disconnected or changed.
+</ParamField>
+
+## Use Cases
+
+### Sync with Lighting Console
+
+Receive timecode from a lighting console and use it to trigger HNode automation:
+
+```yaml
+exporters:
+  - type: TimeCodeExporter
+    midiDevice: "Console MIDI Out"
+```
+
+### Media Server Synchronization
+
+Broadcast timecode to media servers for synchronized video playback:
+
+```yaml
+exporters:
+  - type: TimeCodeExporter
+    midiDevice: "Timecode Generator"
+```
+
+### Show Control
+
+Integrate with show control systems that use MIDI timecode as the master clock:
+
+```yaml
+exporters:
+  - type: TimeCodeExporter
+    midiDevice: "Master Clock"
+```
+
+## Timing Considerations
+
+The UDP packet is sent during `InitFrame()` rather than `CompleteFrame()` to minimize latency. This ensures timecode is broadcast as early as possible in the frame processing cycle.
+
+### Latency
+
+- MIDI timecode reception: ~1-2ms
+- UDP broadcast: \<1ms on localhost
+- Total latency: Typically \<3ms
+
+## Network Configuration
+
+By default, the exporter broadcasts to localhost only. To send to remote machines, modify the source code:
+
+```csharp
+// Change from:
+udpClient.Connect(IPAddress.Loopback, port);
+
+// To:
+udpClient.Connect(IPAddress.Parse("192.168.1.100"), port);
+```
+
+## Error Handling
+
+The exporter includes error handling for:
+
+- Missing MIDI devices
+- Disconnected MIDI devices
+- Invalid timecode messages
+- UDP send failures
+
+Errors are logged to the Unity console for debugging.
+
+## Limitations
+
+- Only receives timecode (does not generate or send MTC)
+- Fixed UDP port list (requires code modification to change)
+- Localhost only by default
+- Does not support LTC (Linear Timecode) - MIDI only
+
+## Receiving Applications
+
+To receive timecode in your application:
+
+1. Create a UDP socket listening on one of the five ports (7001-7005)
+2. Parse the 13-byte packet structure
+3. Convert big-endian integers to your platform's native format
+4. Use the timecode and frame data for synchronization
+
+See the code examples above for implementation details in C# and Python.

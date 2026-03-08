@@ -1,0 +1,485 @@
+---
+title: 'Furality Somna Serializer'
+description: 'Custom serializer optimized for Furality events with RGB channel merging'
+---
+
+## Overview
+
+The Furality Somna serializer is a specialized implementation designed for Furality event fixtures. It supports RGB channel merging, allowing multiple DMX channels to be combined into a single block's color channels for compact representation of RGB fixtures.
+
+## Class: FuralitySomna
+
+**Namespace:** Global  
+**Implements:** `IDMXSerializer`
+
+### Configuration Constants
+
+<ResponseField name="blockSize" type="const int" default="16">
+  Size in pixels of each channel block (16×16 pixels), matching VRSL standard
+</ResponseField>
+
+<ResponseField name="blocksPerCol" type="const int" default="13">
+  Number of channel blocks per column
+</ResponseField>
+
+### Properties
+
+<ResponseField name="mergedChannels" type="Dictionary<DMXChannel, ColorChannel>">
+  Maps DMX channel numbers to their assigned color channel (Red, Green, or Blue).
+  
+  **Usage:**
+  - Red channel: First channel of RGB triplet
+  - Green channel: Second channel of RGB triplet
+  - Blue channel: Third channel of RGB triplet (does not increment position)
+  
+  Channels not in this dictionary are rendered as standard grayscale blocks.
+</ResponseField>
+
+<ResponseField name="cumulativeOffset" type="int" default="0">
+  Internal offset tracking how many merged channels have been processed. Reset each frame.
+</ResponseField>
+
+## How It Works
+
+### Standard vs Merged Channels
+
+**Standard Channel (no merge):**
+```
+Channel 0: Grayscale block at position 0
+Channel 1: Grayscale block at position 1
+Channel 2: Grayscale block at position 2
+```
+
+**Merged RGB Channels:**
+```
+Channel 0 (Red):   ┐
+Channel 1 (Green): ├─→ Single RGB block at position 0
+Channel 2 (Blue):  ┘
+Channel 3 (Red):   ┐
+Channel 4 (Green): ├─→ Single RGB block at position 1
+Channel 5 (Blue):  ┘
+```
+
+### Position Calculation
+
+The cumulative offset adjusts block positions to account for merged channels:
+
+```csharp
+// Position formula
+int x = ((channel - cumulativeOffset) / blocksPerCol) * blockSize;
+int y = ((channel - cumulativeOffset) % blocksPerCol) * blockSize;
+
+// Offset increments for Red and Green channels
+// Offset does NOT increment for Blue channels
+```
+
+**Example:**
+- Channel 0 (Red): offset = 0, position = 0
+- Channel 1 (Green): offset = 1, position = 0 (same as channel 0)
+- Channel 2 (Blue): offset = 1, position = 0 (same, offset doesn't increment)
+- Channel 3 (standard): offset = 1, position = 1
+
+## Methods
+
+### InitFrame
+
+Resets the cumulative offset counter at the start of each frame.
+
+```csharp
+public void InitFrame(ref List<byte> channelValues)
+```
+
+<ParamField path="channelValues" type="ref List<byte>" required>
+  The list of all channel values (not used by this method)
+</ParamField>
+
+**Action:** Sets `cumulativeOffset` to 0
+
+<Warning>
+  Must be called at the start of each frame, or position calculations will be incorrect.
+</Warning>
+
+### SerializeChannel
+
+Encodes a DMX channel as either a grayscale block or a color channel contribution.
+
+```csharp
+public void SerializeChannel(ref Color32[] pixels, byte channelValue, 
+    int channel, int textureWidth, int textureHeight)
+```
+
+<ParamField path="pixels" type="ref Color32[]" required>
+  The pixel array to write to
+</ParamField>
+
+<ParamField path="channelValue" type="byte" required>
+  The DMX channel value (0-255)
+</ParamField>
+
+<ParamField path="channel" type="int" required>
+  The DMX channel number
+</ParamField>
+
+<ParamField path="textureWidth" type="int" required>
+  Width of the output texture
+</ParamField>
+
+<ParamField path="textureHeight" type="int" required>
+  Height of the output texture
+</ParamField>
+
+**Process:**
+1. Calculates block position using `(channel - cumulativeOffset)`
+2. Checks if channel is in `mergedChannels` dictionary:
+   - **If merged**: Mixes the value into the appropriate color channel (R, G, or B)
+   - **If not merged**: Creates a standard grayscale block
+3. Updates cumulative offset:
+   - Increments for Red and Green merged channels
+   - Does NOT increment for Blue merged channels
+   - Does NOT increment for standard channels
+
+### DeserializeChannel
+
+Decoding is not implemented.
+
+```csharp
+public void DeserializeChannel(Texture2D tex, ref byte channelValue, 
+    int channel, int textureWidth, int textureHeight)
+```
+
+<Warning>
+  **Not Implemented**: This method throws `NotImplementedException`. Furality Somna is currently **encode-only**.
+</Warning>
+
+## Usage Example
+
+### Basic Setup
+
+```csharp
+using static TextureWriter;
+
+// Create Furality Somna serializer
+var furalitySomna = new FuralitySomna();
+
+// Configure RGB fixtures
+furalitySomna.mergedChannels = new Dictionary<DMXChannel, ColorChannel>
+{
+    // Fixture 1: Channels 0-2 (RGB)
+    { 0, ColorChannel.Red },
+    { 1, ColorChannel.Green },
+    { 2, ColorChannel.Blue },
+    
+    // Fixture 2: Channels 10-12 (RGB)
+    { 10, ColorChannel.Red },
+    { 11, ColorChannel.Green },
+    { 12, ColorChannel.Blue },
+};
+
+// Initialize frame
+var channelValues = new List<byte>();
+furalitySomna.InitFrame(ref channelValues);
+
+// Serialize channels
+Color32[] pixels = new Color32[256 * 256];
+
+// Fixture 1: Red=255, Green=128, Blue=64
+furalitySomna.SerializeChannel(ref pixels, 255, 0, 256, 256); // R
+furalitySomna.SerializeChannel(ref pixels, 128, 1, 256, 256); // G
+furalitySomna.SerializeChannel(ref pixels, 64, 2, 256, 256);  // B
+// Result: Single RGB block at position 0 with color (255, 128, 64)
+
+// Channel 3: Standard grayscale
+furalitySomna.SerializeChannel(ref pixels, 200, 3, 256, 256);
+// Result: Grayscale block at position 1 with value 200
+```
+
+### Multiple RGB Fixtures
+
+```csharp
+// Configure 4 RGB fixtures (12 channels total)
+for (int fixture = 0; fixture < 4; fixture++)
+{
+    int baseChannel = fixture * 3;
+    furalitySomna.mergedChannels[baseChannel + 0] = ColorChannel.Red;
+    furalitySomna.mergedChannels[baseChannel + 1] = ColorChannel.Green;
+    furalitySomna.mergedChannels[baseChannel + 2] = ColorChannel.Blue;
+}
+
+// Encode all fixtures
+furalitySomna.InitFrame(ref channelValues);
+
+for (int fixture = 0; fixture < 4; fixture++)
+{
+    int baseChannel = fixture * 3;
+    byte r = (byte)(fixture * 60);  // Different colors per fixture
+    byte g = (byte)(255 - fixture * 60);
+    byte b = 128;
+    
+    furalitySomna.SerializeChannel(ref pixels, r, baseChannel + 0, 256, 256);
+    furalitySomna.SerializeChannel(ref pixels, g, baseChannel + 1, 256, 256);
+    furalitySomna.SerializeChannel(ref pixels, b, baseChannel + 2, 256, 256);
+}
+
+// Result: 4 colorful blocks at positions 0, 1, 2, 3
+// Instead of 12 grayscale blocks at positions 0-11
+```
+
+## Channel Layout Example
+
+Configuration:
+```csharp
+mergedChannels = {
+    { 0, Red }, { 1, Green }, { 2, Blue },    // Fixture 1
+    { 3, Red }, { 4, Green }, { 5, Blue },    // Fixture 2
+    // Channel 6 not configured (standard)
+}
+```
+
+Layout:
+```
+Position 0: RGB(Ch0, Ch1, Ch2)  ← Fixture 1
+Position 1: RGB(Ch3, Ch4, Ch5)  ← Fixture 2
+Position 2: Gray(Ch6)           ← Standard channel
+Position 3: Gray(Ch7)           ← Standard channel
+...
+```
+
+## Color Channel Constants
+
+From `TextureWriter.ColorChannel` enum:
+
+```csharp
+public enum ColorChannel
+{
+    Red,
+    Green,
+    Blue
+}
+```
+
+## Advantages
+
+<CardGroup cols={2}>
+  <Card title="RGB Fixture Support" icon="palette">
+    Native support for RGB color mixing fixtures
+  </Card>
+  
+  <Card title="Space Efficient" icon="compress">
+    3 channels (RGB) occupy 1 block instead of 3
+  </Card>
+  
+  <Card title="VRSL Compatible" icon="link">
+    Uses same 16×16 block size as VRSL
+  </Card>
+  
+  <Card title="Flexible" icon="sliders">
+    Mix merged RGB and standard channels freely
+  </Card>
+</CardGroup>
+
+## Limitations
+
+<Warning>
+  **Encode-Only**: Deserialization is not implemented. Cannot receive data.
+</Warning>
+
+- **Manual Configuration**: Must manually specify which channels are merged
+- **RGB Triplets Only**: Designed for 3-channel RGB fixtures, not RGBW or other formats
+- **Order Dependent**: Channels must be serialized in order (R, then G, then B)
+- **No Validation**: Does not verify RGB channels are consecutive or properly configured
+
+## Channel Capacity
+
+Capacity depends on how many RGB fixtures are used:
+
+```csharp
+// Without merging
+int standardCapacity = (textureWidth / blockSize) * (textureHeight / blockSize) / blocksPerCol;
+
+// With merging (assuming all channels are RGB)
+int rgbFixtures = totalChannels / 3;
+int mergedCapacity = rgbFixtures; // Each fixture uses 1 block
+
+// Example: 256×256 texture, 16×16 blocks
+// Standard: (256/16) × (256/16) = 256 blocks
+// RGB: 256 blocks × 3 channels = 768 channels (256 fixtures)
+```
+
+### Capacity Comparison
+
+| Mode | Blocks Used | Channels Encoded | Efficiency |
+|------|-------------|------------------|------------|
+| All Standard | 169 | 169 | 1.0× |
+| All RGB Merged | 169 | 507 (169 fixtures) | 3.0× |
+| Mixed (50/50) | 169 | ~338 | 2.0× |
+
+<Note>
+  RGB merging effectively triples channel capacity for RGB fixtures compared to standard grayscale encoding.
+</Note>
+
+## Best Practices
+
+### 1. Group RGB Fixtures
+
+Organize DMX channels with RGB fixtures grouped together:
+
+```csharp
+// Good: RGB fixtures grouped
+Channels 0-2:   Fixture 1 RGB
+Channels 3-5:   Fixture 2 RGB
+Channels 6-8:   Fixture 3 RGB
+Channels 9-11:  Fixture 4 RGB
+Channels 12-15: Standard channels (dimmer, strobe, etc.)
+
+// Poor: Mixed arrangement
+Channels 0-2:   Fixture 1 RGB
+Channel 3:      Fixture 1 dimmer
+Channels 4-6:   Fixture 2 RGB
+Channel 7:      Fixture 2 dimmer
+```
+
+### 2. Initialize Before Each Frame
+
+```csharp
+void EncodeFrame()
+{
+    // MUST call InitFrame first
+    furalitySomna.InitFrame(ref channelValues);
+    
+    // Then serialize all channels in order
+    for (int i = 0; i < channelValues.Count; i++)
+    {
+        furalitySomna.SerializeChannel(ref pixels, channelValues[i], 
+            i, textureWidth, textureHeight);
+    }
+}
+```
+
+### 3. Validate Configuration
+
+Verify RGB channels are properly configured:
+
+```csharp
+public bool ValidateRGBConfiguration(Dictionary<DMXChannel, ColorChannel> config)
+{
+    foreach (var kvp in config)
+    {
+        if (kvp.Value == ColorChannel.Red)
+        {
+            // Red channel should be followed by Green and Blue
+            if (!config.ContainsKey(kvp.Key + 1) || 
+                config[kvp.Key + 1] != ColorChannel.Green ||
+                !config.ContainsKey(kvp.Key + 2) || 
+                config[kvp.Key + 2] != ColorChannel.Blue)
+            {
+                Debug.LogError($"Incomplete RGB triplet starting at channel {kvp.Key}");
+                return false;
+            }
+        }
+    }
+    return true;
+}
+```
+
+## Advanced Usage
+
+### Dynamic RGB Configuration
+
+Configure fixtures at runtime based on fixture definitions:
+
+```csharp
+public class RGBFixture
+{
+    public int startChannel;
+    public int redOffset;
+    public int greenOffset;
+    public int blueOffset;
+}
+
+public void ConfigureFixtures(List<RGBFixture> fixtures)
+{
+    furalitySomna.mergedChannels.Clear();
+    
+    foreach (var fixture in fixtures)
+    {
+        furalitySomna.mergedChannels[fixture.startChannel + fixture.redOffset] = 
+            ColorChannel.Red;
+        furalitySomna.mergedChannels[fixture.startChannel + fixture.greenOffset] = 
+            ColorChannel.Green;
+        furalitySomna.mergedChannels[fixture.startChannel + fixture.blueOffset] = 
+            ColorChannel.Blue;
+    }
+}
+```
+
+## Comparison with Other Serializers
+
+| Feature | Furality Somna | VRSL | Binary |
+|---------|----------------|------|--------|
+| Block Size | 16×16 | 16×16 | 4×4 |
+| RGB Merging | Yes | Yes (RGB Grid) | No |
+| Channels (256×256) | 169-507 | 169-507 | 416 |
+| Decoding | No | Yes | Yes |
+| Use Case | Furality events | VRChat VRSL | General |
+
+## Performance
+
+- **Encoding (standard channel)**: ~0.015ms
+- **Encoding (merged channel)**: ~0.018ms (color mixing overhead)
+- **InitFrame**: ~0.001ms
+- **Memory**: Minimal (Dictionary overhead)
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Colors appear in wrong positions">
+    This occurs when `InitFrame` is not called before encoding.
+    
+    **Solution:** Always call `InitFrame` at the start of each frame to reset the cumulative offset.
+  </Accordion>
+  
+  <Accordion title="RGB colors are incorrect">
+    Check that channels are serialized in R→G→B order.
+    
+    **Solution:** Ensure Red channel is serialized first, followed by Green, then Blue.
+  </Accordion>
+  
+  <Accordion title="Some fixtures are grayscale instead of RGB">
+    The channels may not be configured in `mergedChannels`.
+    
+    **Solution:** Verify all RGB channels are added to the dictionary with correct ColorChannel values.
+  </Accordion>
+  
+  <Accordion title="Blocks overlap or appear at wrong positions">
+    The cumulative offset may be incorrect due to wrong channel order.
+    
+    **Solution:** Serialize channels in sequential order (0, 1, 2, 3...) and ensure Blue channels don't increment offset.
+  </Accordion>
+</AccordionGroup>
+
+## Future Enhancements
+
+<Info>
+  This serializer is functional but could be extended with additional features.
+</Info>
+
+Potential improvements:
+1. Implement `DeserializeChannel` for bidirectional communication
+2. Support RGBW (4-channel) fixtures
+3. Auto-detect RGB triplets from channel definitions
+4. Add validation to ensure proper RGB channel ordering
+5. Support non-consecutive RGB channels
+
+## When to Use
+
+✅ **Good for:**
+- Furality events and compatible fixtures
+- RGB LED fixtures and color-mixing lights
+- Maximizing channel density for color fixtures
+- VRSL-compatible environments requiring RGB support
+
+❌ **Not suitable for:**
+- Bidirectional communication (no decoder)
+- Non-RGB fixtures (use VRSL or Binary instead)
+- Fixtures with non-standard channel layouts
+- Applications requiring generic serialization

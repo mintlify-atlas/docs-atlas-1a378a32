@@ -1,0 +1,314 @@
+---
+title: IDMXGenerator
+description: Interface for implementing custom DMX channel data generation and manipulation logic
+---
+
+## Overview
+
+`IDMXGenerator` is the core interface for implementing custom DMX data generation logic. Generators can create, modify, or transform DMX channel values in real-time, enabling effects like fades, remapping, animations, and complex lighting sequences.
+
+## When to Implement
+
+Implement `IDMXGenerator` when you need to:
+
+- Generate DMX data procedurally (e.g., animations, effects)
+- Modify existing DMX channel values (e.g., fades, intensity scaling)
+- Remap or redirect DMX channels
+- Apply time-based effects to lighting
+- Integrate external data sources (e.g., audio, OSC, timecode)
+- Implement custom lighting behaviors and patterns
+
+## Interface Definition
+
+```csharp
+public interface IDMXGenerator : IUserInterface<IDMXGenerator>, IConstructable
+{
+    void GenerateDMX(ref List<byte> dmxData);
+}
+```
+
+## Methods
+
+### GenerateDMX
+
+The main method called each frame to generate or modify DMX channel data. This method receives the current DMX data and can read from it, modify existing values, or write completely new values.
+
+<ParamField path="dmxData" type="ref List<byte>" required>
+  The DMX channel data array. Each index represents a DMX channel (0-511 for standard DMX universe). Values range from 0-255. You can both read and write to this array.
+</ParamField>
+
+<ResponseField name="void">
+  This method does not return a value. All changes are made by modifying the `dmxData` parameter directly.
+</ResponseField>
+
+```csharp
+public void GenerateDMX(ref List<byte> dmxData)
+{
+    // Read current channel values
+    byte currentValue = dmxData[0];
+    
+    // Modify channel values
+    dmxData[0] = 255; // Set channel 0 to full
+    dmxData[1] = (byte)(currentValue / 2); // Set channel 1 to half of channel 0's value
+}
+```
+
+## Complete Implementation Examples
+
+### Example 1: Fade Generator
+
+This generator smoothly fades specified channels to a target value over time:
+
+```csharp
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class FadeGenerator : IDMXGenerator
+{
+    public List<DMXChannel> channels = new List<DMXChannel>();
+    public EquationNumber valueToFadeTo = 0;
+    public TimeSpan fadeDuration = TimeSpan.FromSeconds(5);
+    
+    private TimeSpan fadeStart;
+    private TimeSpan fadeEnd;
+
+    public void Construct() { }
+    public void Deconstruct() { }
+
+    public void GenerateDMX(ref List<byte> dmxData)
+    {
+        // Calculate fade progress (0 to 1)
+        var now = DateTime.Now.TimeOfDay;
+        float t = Mathf.InverseLerp(
+            (float)fadeStart.TotalMilliseconds, 
+            (float)fadeEnd.TotalMilliseconds, 
+            (float)now.TotalMilliseconds
+        );
+
+        // Apply fade to each specified channel
+        foreach (var channel in channels)
+        {
+            dmxData[channel] = (byte)Mathf.Lerp(dmxData[channel], valueToFadeTo, t);
+        }
+    }
+
+    public void ConstructUserInterface(RectTransform rect)
+    {
+        // Fade In button (fade from dark to bright)
+        Util.AddButton(rect, "Fade In")
+            .WithCallback(() =>
+            {
+                fadeStart = DateTime.Now.TimeOfDay + fadeDuration;
+                fadeEnd = DateTime.Now.TimeOfDay;
+            });
+
+        // Fade Out button (fade from bright to dark)
+        Util.AddButton(rect, "Fade Out")
+            .WithCallback(() =>
+            {
+                fadeStart = DateTime.Now.TimeOfDay;
+                fadeEnd = DateTime.Now.TimeOfDay + fadeDuration;
+            });
+
+        // Duration input
+        Util.AddInputField(rect, "Fade Duration (s)")
+            .WithText(fadeDuration.TotalSeconds.ToString())
+            .WithCallback((value) =>
+            {
+                if (double.TryParse(value, out double result))
+                {
+                    fadeDuration = TimeSpan.FromSeconds(result);
+                }
+            });
+    }
+
+    public void DeconstructUserInterface() { }
+    public void UpdateUserInterface() { }
+}
+```
+
+### Example 2: Channel Mapper
+
+This generator remaps one channel's value to another:
+
+```csharp
+using System.Collections.Generic;
+using UnityEngine;
+
+public class ChannelMapper : IDMXGenerator
+{
+    public DMXChannel sourceChannel = 0;
+    public DMXChannel targetChannel = 1;
+    public float multiplier = 1.0f;
+
+    public void Construct() { }
+    public void Deconstruct() { }
+
+    public void GenerateDMX(ref List<byte> dmxData)
+    {
+        // Read from source channel
+        byte sourceValue = dmxData[sourceChannel];
+        
+        // Apply multiplier and write to target
+        float scaled = sourceValue * multiplier;
+        dmxData[targetChannel] = (byte)Mathf.Clamp(scaled, 0, 255);
+    }
+
+    public void ConstructUserInterface(RectTransform rect)
+    {
+        Util.AddInputField(rect, "Source Channel")
+            .WithText(((int)sourceChannel).ToString())
+            .WithCallback((value) =>
+            {
+                if (int.TryParse(value, out int result))
+                {
+                    sourceChannel = (DMXChannel)result;
+                }
+            });
+
+        Util.AddInputField(rect, "Target Channel")
+            .WithText(((int)targetChannel).ToString())
+            .WithCallback((value) =>
+            {
+                if (int.TryParse(value, out int result))
+                {
+                    targetChannel = (DMXChannel)result;
+                }
+            });
+
+        Util.AddInputField(rect, "Multiplier")
+            .WithText(multiplier.ToString())
+            .WithCallback((value) =>
+            {
+                if (float.TryParse(value, out float result))
+                {
+                    multiplier = result;
+                }
+            });
+    }
+
+    public void DeconstructUserInterface() { }
+    public void UpdateUserInterface() { }
+}
+```
+
+### Example 3: Wave Effect Generator
+
+This generator creates a wave pattern across multiple channels:
+
+```csharp
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class WaveGenerator : IDMXGenerator
+{
+    public int startChannel = 0;
+    public int channelCount = 10;
+    public float speed = 1.0f;
+    public float amplitude = 255f;
+
+    public void Construct() { }
+    public void Deconstruct() { }
+
+    public void GenerateDMX(ref List<byte> dmxData)
+    {
+        float time = Time.time * speed;
+
+        for (int i = 0; i < channelCount; i++)
+        {
+            int channel = startChannel + i;
+            if (channel >= dmxData.Count) break;
+
+            // Create sine wave offset by channel index
+            float wave = Mathf.Sin(time + i * 0.5f);
+            // Map from [-1, 1] to [0, amplitude]
+            byte value = (byte)Mathf.Clamp((wave + 1f) * 0.5f * amplitude, 0, 255);
+            
+            dmxData[channel] = value;
+        }
+    }
+
+    public void ConstructUserInterface(RectTransform rect)
+    {
+        Util.AddInputField(rect, "Start Channel")
+            .WithText(startChannel.ToString())
+            .WithCallback((value) =>
+            {
+                if (int.TryParse(value, out int result))
+                {
+                    startChannel = result;
+                }
+            });
+
+        Util.AddInputField(rect, "Channel Count")
+            .WithText(channelCount.ToString())
+            .WithCallback((value) =>
+            {
+                if (int.TryParse(value, out int result))
+                {
+                    channelCount = result;
+                }
+            });
+
+        Util.AddInputField(rect, "Speed")
+            .WithText(speed.ToString())
+            .WithCallback((value) =>
+            {
+                if (float.TryParse(value, out float result))
+                {
+                    speed = result;
+                }
+            });
+    }
+
+    public void DeconstructUserInterface() { }
+    public void UpdateUserInterface() { }
+}
+```
+
+## Inherited Interfaces
+
+### IUserInterface\<IDMXGenerator\>
+
+Generators can provide custom UI elements for configuration through methods like `ConstructUserInterface()`, `DeconstructUserInterface()`, and `UpdateUserInterface()`.
+
+### IConstructable
+
+Generators must implement lifecycle methods `Construct()` and `Deconstruct()` for resource management and initialization.
+
+## Best Practices
+
+1. **Performance**: `GenerateDMX()` is called every frame. Minimize allocations and expensive calculations
+2. **Channel Bounds**: Always check that channel indices are within the valid range (0-511)
+3. **Value Clamping**: Ensure output values stay within 0-255 range
+4. **State Management**: Use `Construct()` and `Deconstruct()` for initialization and cleanup
+5. **Time-Based Effects**: Use `Time.time` or `DateTime.Now` for time-based animations
+6. **Read Then Write**: When modifying existing values, read the current value first to enable layering of multiple generators
+
+## Generator Pipeline
+
+Multiple generators can be chained together. Each generator receives the output of the previous generator:
+
+```
+Initial DMX Data → Generator 1 → Generator 2 → Generator N → Final DMX Output
+```
+
+This allows you to compose complex effects from simple generators.
+
+## Common Use Cases
+
+- **Intensity Control**: Scale all channels by a master intensity value
+- **Blackout**: Set all channels to 0 when triggered
+- **Effects**: Create chases, strobes, and animated patterns
+- **Remapping**: Route channels to different outputs
+- **Audio Reactivity**: Modulate channels based on audio input
+- **Timecode Sync**: Trigger cues based on SMPTE timecode
+- **Procedural Animation**: Generate complex lighting sequences algorithmically
+
+## See Also
+
+- [IDMXSerializer](/api/interfaces/idmx-serializer) - Serialize DMX data to video
+- [IExporter](/api/interfaces/iexporter) - Export DMX data to files
+- [Generators Concept](/concepts/generators) - Understanding the generator system

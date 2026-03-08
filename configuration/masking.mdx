@@ -1,0 +1,198 @@
+---
+title: 'Masking'
+description: 'Control which DMX channels are visible in the output'
+---
+
+## Overview
+
+Masking allows you to control which DMX channels are visible in the rendered output. You can hide specific channel ranges, invert the mask to show only certain channels, or automatically hide channels that are set to zero.
+
+## Configuration Properties
+
+<ParamField path="maskedChannels" type="array" default="[]">
+  A list of DMX channel ranges to mask out. Masked channels will be forced to transparent in the output.
+
+  Each range is defined with a `start` and `end` channel. Channels can be specified in two formats:
+  - **Universe.Channel format**: `1.1` (universe 1, channel 1), `2.512` (universe 2, channel 512)
+  - **Global channel index**: `0` (first channel), `512` (first channel of second universe)
+
+  **Universe.Channel format:**
+  - Universe numbers start at 1
+  - Channel numbers within a universe range from 1 to 512
+  - Example: `1.1` is the first channel, `1.512` is the 512th channel
+
+  **Global channel index:**
+  - Starts at 0
+  - Each universe contains 512 channels
+  - Channel 512 is the first channel of universe 2
+  - Channel 1024 is the first channel of universe 3
+</ParamField>
+
+<ParamField path="invertMask" type="boolean" default="false">
+  If `true`, the mask behavior is inverted. Instead of hiding the channels in `maskedChannels`, only those channels will be visible and all others will be transparent.
+
+  This is useful when you want to isolate a specific range of fixtures:
+  - Set `maskedChannels` to the range you want to see
+  - Set `invertMask` to `true`
+  - All other channels will be hidden
+</ParamField>
+
+<ParamField path="autoMaskOnZero" type="boolean" default="false">
+  If `true`, channels that are set to zero will automatically be masked (made transparent), regardless of the `maskedChannels` configuration.
+
+  This is useful for:
+  - Hiding fixtures that are turned off
+  - Cleaning up the output by removing black pixels
+  - Creating cleaner overlays when compositing multiple layers
+</ParamField>
+
+## YAML Configuration Examples
+
+### Basic Channel Masking
+
+```yaml
+# Hide channels 1-100 in universe 1
+maskedChannels:
+  - start: 1.1
+    end: 1.100
+invertMask: false
+autoMaskOnZero: false
+```
+
+### Multiple Ranges
+
+```yaml
+# Hide multiple ranges
+maskedChannels:
+  - start: 1.1
+    end: 1.50
+  - start: 1.100
+    end: 1.150
+  - start: 2.1
+    end: 2.50
+invertMask: false
+autoMaskOnZero: false
+```
+
+### Using Global Channel Index
+
+```yaml
+# Hide first 100 channels (global index)
+maskedChannels:
+  - start: 0
+    end: 99
+invertMask: false
+autoMaskOnZero: false
+```
+
+### Inverted Mask (Show Only Specific Channels)
+
+```yaml
+# Show ONLY channels 1-100, hide everything else
+maskedChannels:
+  - start: 1.1
+    end: 1.100
+invertMask: true
+autoMaskOnZero: false
+```
+
+### Auto-Hide Zero Channels
+
+```yaml
+# Automatically hide any channels set to zero
+maskedChannels: []
+invertMask: false
+autoMaskOnZero: true
+```
+
+### Combined Configuration
+
+```yaml
+# Show only channels 50-200 AND hide zeros
+maskedChannels:
+  - start: 1.50
+    end: 1.200
+invertMask: true
+autoMaskOnZero: true
+```
+
+## Channel Format Examples
+
+### Universe.Channel Format
+
+```yaml
+maskedChannels:
+  - start: 1.1      # Universe 1, Channel 1
+    end: 1.512      # Universe 1, Channel 512
+  - start: 2.1      # Universe 2, Channel 1
+    end: 3.256      # Universe 3, Channel 256
+```
+
+### Global Channel Index Format
+
+```yaml
+maskedChannels:
+  - start: 0        # First channel overall (Universe 1, Channel 1)
+    end: 511        # Last channel of universe 1 (Universe 1, Channel 512)
+  - start: 512      # First channel of universe 2 (Universe 2, Channel 1)
+    end: 1023       # Last channel of universe 2 (Universe 2, Channel 512)
+```
+
+## Use Cases
+
+### Isolating Specific Fixtures
+
+Use inverted masking to solo specific fixtures during programming:
+
+```yaml
+maskedChannels:
+  - start: 1.100
+    end: 1.150
+invertMask: true
+```
+
+### Hiding Unused Universes
+
+If you're only using the first 2 universes, hide the rest:
+
+```yaml
+maskedChannels:
+  - start: 1025     # Start of universe 3
+    end: 262143     # Maximum channels (512 universes × 512 channels)
+invertMask: false
+```
+
+### Clean Compositing
+
+When layering multiple HNode instances, use `autoMaskOnZero` to create clean transparency:
+
+```yaml
+maskedChannels: []
+invertMask: false
+autoMaskOnZero: true
+```
+
+### Debugging Specific Fixtures
+
+Mask all channels except the ones you're troubleshooting:
+
+```yaml
+maskedChannels:
+  - start: 2.100
+    end: 2.120
+invertMask: true
+autoMaskOnZero: false
+```
+
+## Tips
+
+- **Empty mask list**: If `maskedChannels` is empty and `invertMask` is `false`, no channels are masked
+- **Empty mask list with invert**: If `maskedChannels` is empty and `invertMask` is `true`, ALL channels are masked
+- **Overlapping ranges**: You can define overlapping ranges; the mask will be applied to the union of all ranges
+- **Performance**: Masking has minimal performance impact, so use it freely
+
+## Related Settings
+
+- [Resolution](/configuration/resolution) - Configure input and output resolutions
+- [Art-Net Settings](/configuration/artnet-settings) - Configure Art-Net network settings
+- [Transcoding](/configuration/transcoding) - Convert between pixel mapping formats

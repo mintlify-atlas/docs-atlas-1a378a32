@@ -1,0 +1,120 @@
+---
+title: 'Strobe'
+description: 'Create strobe effects at configurable frequencies'
+---
+
+## Overview
+
+The `Strobe` generator creates a periodic on/off strobe effect on a single DMX channel. The strobe frequency and on/off values are fully configurable.
+
+## Properties
+
+<ParamField path="channel" type="DMXChannel" required>
+  The DMX channel to strobe.
+</ParamField>
+
+<ParamField path="valueOn" type="byte" default="255">
+  DMX value when strobe is ON (0-255).
+</ParamField>
+
+<ParamField path="valueOff" type="byte" default="0">
+  DMX value when strobe is OFF (0-255).
+</ParamField>
+
+<ParamField path="frequency" type="float" default="1.0">
+  Strobe frequency in Hertz (Hz). Higher values = faster strobing.
+  
+  Common values:
+  - `1.0` - 1 flash per second
+  - `5.0` - 5 flashes per second
+  - `10.0` - 10 flashes per second (fast strobe)
+</ParamField>
+
+## Implementation
+
+From ~/workspace/source/Assets/Plugin/Generators/GeneratorStrobe.cs:16-34:
+
+```csharp
+public void GenerateDMX(ref List<byte> dmxData)
+{
+    dmxData.EnsureCapacity(channel + 1);
+
+    //use system time to determine if we are on or off
+    var time = DateTime.Now.Millisecond;
+
+    //now determine if we are on or off
+    float period = 1000.0f / frequency; //in ms
+
+    if (time % period < period / 2)
+    {
+        dmxData[channel] = valueOn;
+    }
+    else
+    {
+        dmxData[channel] = valueOff;
+    }
+}
+```
+
+## Configuration Example
+
+```yaml
+generators:
+  # Standard strobe at 5 Hz
+  - !Strobe
+    channel: 10
+    frequency: 5.0
+    valueOn: 255
+    valueOff: 0
+  
+  # Slow pulse between two values
+  - !Strobe
+    channel: 1.15
+    frequency: 0.5
+    valueOn: 200
+    valueOff: 50
+```
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Alert/Warning Strobe">
+    Fast strobe for visual alerts:
+    
+    ```yaml
+    - !Strobe
+      channel: 20
+      frequency: 10.0
+      valueOn: 255
+      valueOff: 0
+    ```
+  </Accordion>
+  
+  <Accordion title="Heartbeat Effect">
+    Slow pulsing effect:
+    
+    ```yaml
+    - !Strobe
+      channel: 5
+      frequency: 1.0
+      valueOn: 180
+      valueOff: 30
+    ```
+  </Accordion>
+  
+  <Accordion title="Music Sync Strobe">
+    Beat-synced strobe (120 BPM = 2 Hz):
+    
+    ```yaml
+    - !Strobe
+      channel: 1.1
+      frequency: 2.0
+      valueOn: 255
+      valueOff: 0
+    ```
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+High-frequency strobing (>10 Hz) can trigger photosensitive epilepsy. Use with caution in public spaces.
+</Warning>

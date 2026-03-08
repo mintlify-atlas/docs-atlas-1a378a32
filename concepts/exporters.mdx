@@ -1,0 +1,523 @@
+---
+title: Exporters
+description: Understanding exporters that send DMX data to external systems and protocols
+---
+
+## What are Exporters?
+
+Exporters are plugins that send processed DMX data to external systems and protocols. They run in parallel with serializers, receiving the same final DMX channel data and outputting it to MIDI devices, files, timecode systems, and other destinations.
+
+<CardGroup cols={2}>
+  <Card title="Parallel Output" icon="code-branch">
+    Run alongside video serialization
+  </Card>
+  <Card title="External Systems" icon="arrow-right-from-bracket">
+    Send data to MIDI, files, timecode
+  </Card>
+  <Card title="Read-Only" icon="book">
+    Access but don't modify DMX data
+  </Card>
+  <Card title="Frame-Synced" icon="sync">
+    Process data once per frame
+  </Card>
+</CardGroup>
+
+## The IExporter Interface
+
+All exporters implement the `IExporter` interface:
+
+```csharp IExporter.cs:6-35
+public interface IExporter : IUserInterface<IExporter>, IConstructable
+{
+    /// <summary>
+    /// Serializes a channel from a raw byte representation
+    /// </summary>
+    void SerializeChannel(byte channelValue, int channel);
+    
+    /// <summary>
+    /// Called at the start of each frame to reset any state.
+    /// </summary>
+    void InitFrame(ref List<byte> channelValues);
+    
+    /// <summary>
+    /// Called after all channels have been serialized for the current frame.
+    /// Can be used to for example generate a CRC block area, or operate on 
+    /// multiple channels at once.
+    /// </summary>
+    void CompleteFrame(ref List<byte> channelValues);
+}
+```
+
+### Lifecycle Methods
+
+<Steps>
+  <Step title="InitFrame">
+    Called once per frame before any channels are processed. Use to reset counters or prepare state.
+  </Step>
+  
+  <Step title="SerializeChannel">
+    Called for each active DMX channel in sequence. Note: many exporters ignore this and only use `CompleteFrame`.
+  </Step>
+  
+  <Step title="CompleteFrame">
+    Called after all channels are processed with the complete channel array. Most export logic happens here.
+  </Step>
+</Steps>
+
+<Note>
+Unlike generators, exporters receive a **read-only** view of the DMX data (though the signature uses `ref` for performance). They should not modify channel values.
+</Note>
+
+## Available Exporters
+
+HNode includes several powerful exporters for different use cases:
+
+### MIDIDMX
+
+**Purpose**: Export DMX data to VRChat worlds via MIDI
+
+<CardGroup cols={2}>
+  <Card title="Protocol" icon="music">
+    Uses MIDI Note On/Off messages
+  </Card>
+  <Card title="Capacity" icon="hashtag">
+    Up to 16,384 channels (8 banks × 2,048)
+  </Card>
+  <Card title="Platform" icon="headset">
+    VRChat worlds with MIDIDMX system
+  </Card>
+  <Card title="Bidirectional" icon="arrows-left-right">
+    Handshake protocol for synchronization
+  </Card>
+</CardGroup>
+
+**How it works**: MIDIDMX encodes DMX channel values into MIDI note events using an 18-bit addressing scheme. It's designed to work with the VRC-MIDIDMX system by Micca.
+
+```csharp MIDIDMX.cs:238-260
+private void SendMidi(int channel, byte value)
+{
+    if (midiOutput == null) return;
+    
+    int bank = (int)(channel / 2048);
+    if (bankStatus != bank)
+    {
+        ChangeBanks(bank);
+    }
+    
+    channel -= bank * 2048;
+    
+    if (channel < 1024)
+    {
+        Send18BitMessage<NoteOnEvent>(channel, value, 0);
+    }
+    else
+    {
+        Send18BitMessage<NoteOffEvent>(channel, value, 1024);
+    }
+    midiUpdates++;
+}
+```
+
+**Configuration**:
+- `midiDevice`: Name of MIDI output device (e.g., "loopMIDI Port")
+- `channelsPerUpdate`: Max channels sent per frame (default: 100)
+- `idleScanChannels`: Channels to refresh during idle (default: 10)
+- `useEditorLog`: Monitor Unity Editor log instead of VRChat log
+
+**Features**:
+- **Automatic Discovery**: Lists all available MIDI devices
+- **Bank Switching**: Handles 8 banks of 2,048 channels each
+- **Watchdog Protocol**: Ensures world is responsive before sending data
+- **Log Monitoring**: Reads VRChat log file to confirm data reception
+- **Selective Updates**: Only sends changed channels to minimize bandwidth
+
+**Setup Process**:
+
+<Steps>
+  <Step title="Install loopMIDI">
+    Install [loopMIDI](https://www.tobias-erichsen.de/software/loopmidi.html) to create virtual MIDI ports.
+  </Step>
+  
+  <Step title="Create MIDI Port">
+    Create a port named "loopMIDI Port" (or customize the name).
+  </Step>
+  
+  <Step title="Configure HNode">
+    Add MIDIDMX exporter and set `midiDevice` to your port name.
+  </Step>
+  
+  <Step title="Enter VRChat World">
+    Load a VRChat world with the VRC-MIDIDMX system installed.
+  </Step>
+  
+  <Step title="Wait for Handshake">
+    MIDIDMX will "knock" and wait for the world to respond via log file.
+  </Step>
+  
+  <Step title="Data Flows">
+    Once connected, DMX data streams to the VRChat world in real-time.
+  </Step>
+</Steps>
+
+<Warning>
+MIDIDMX monitors the VRChat log file for handshake responses. Make sure VRChat has write permissions to `%AppData%\..\LocalLow\VRChat\VRChat\`.
+</Warning>
+
+**Status Codes**:
+
+```csharp MIDIDMX.cs:31-36
+public enum Status : int
+{
+    Disconnected,        // Not connected to MIDI
+    ConnectedWait,       // Connected to MIDI, not connected to world
+    ConnectedSendingData // Connected to world and sending data
+}
+```
+
+Check status with `MidiStatus()` to verify connection state.
+
+**Performance Optimization**:
+
+```csharp MIDIDMX.cs:152-167
+midiUpdates = 0;
+for (int i = midiCatchup; i < channelValues.Count; i++)
+{
+    // Only send if changed or in scan range
+    if ((channelValues[i] != midiData[i] || 
+         (i >= midiScanPosition && i < midiScanPosition + idleScanChannels)) && 
+        i < channelValues.Count)
+    {
+        if (midiUpdates >= channelsPerUpdate)
+        {
+            midiCatchup = i; // Resume next frame
+            break;
+        }
+        midiData[i] = channelValues[i];
+        SendMidi(i, channelValues[i]);
+    }
+}
+```
+
+The exporter tracks previous values and only sends changes, plus a slow background scan to ensure synchronization.
+
+<Tip>
+Set `channelsPerUpdate` to 100 (default) for best compatibility. Higher values may exceed VRChat's input buffer capacity.
+</Tip>
+
+### TextFileExporter
+
+**Purpose**: Export channel data to text files for debugging and analysis
+
+```csharp TextFileExporter.cs:14-21
+public void CompleteFrame(ref List<byte> channelValues)
+{
+    data = channelValues; // Store latest frame
+}
+```
+
+**Configuration**:
+- `onlyNonZeroChannels`: Only export channels with values > 0
+
+**Features**:
+- **Manual Export**: Click "Export channels to text file" button to save
+- **Channel Filtering**: Optionally exclude zero-value channels
+- **Human-Readable Format**: Each line shows `channel: value`
+
+**Output Format**:
+
+```
+0.1: 255
+0.2: 128
+1.5: 64
+3.10: 200
+```
+
+**Use Cases**:
+- Debug DMX routing issues
+- Document channel assignments
+- Verify generator output
+- Create fixture profiles
+- Analyze show data
+
+<Tip>
+Enable "Only export non-zero channels" when working with large DMX setups to create more readable output files.
+</Tip>
+
+### TimeCodeExporter
+
+**Purpose**: Send timecode data to external systems
+
+Exports SMPTE or MIDI timecode synchronized with the DMX data stream, enabling time-synchronized playback across multiple systems.
+
+**Use Cases**:
+- Synchronize with video playback
+- Coordinate multiple lighting controllers
+- Maintain frame-accurate timing
+- Record/replay shows with timecode
+
+## Exporter Execution Flow
+
+Exporters run in parallel with the serializer:
+
+```csharp TextureWriter.cs:107-154
+// Initialize all exporters
+Loader.showconf.Serializer.InitFrame(ref mergedDmxValues);
+foreach (var exporter in Loader.showconf.Exporters)
+{
+    exporter.InitFrame(ref mergedDmxValues);
+}
+
+// Process each channel
+for (int i = 0; i < ChannelsToSerialize; i++)
+{
+    // Serialize to video
+    Loader.showconf.Serializer.SerializeChannel(
+        ref pixels, mergedDmxValues[i], i, TextureWidth, TextureHeight);
+    
+    // Export to external systems
+    foreach (var exporter in Loader.showconf.Exporters)
+    {
+        exporter.SerializeChannel(mergedDmxValues[i], i);
+    }
+}
+
+// Finalize frame
+Loader.showconf.Serializer.CompleteFrame(
+    ref pixels, ref mergedDmxValues, TextureWidth, TextureHeight);
+foreach (var exporter in Loader.showconf.Exporters)
+{
+    exporter.CompleteFrame(ref mergedDmxValues);
+}
+```
+
+<Note>
+Exporters run **every frame**, so performance is critical. Heavy operations should be async or throttled.
+</Note>
+
+## Creating Custom Exporters
+
+Creating an exporter is straightforward:
+
+<Steps>
+  <Step title="Implement IExporter">
+    Create a class implementing `IExporter`:
+    
+    ```csharp
+    public class MyExporter : IExporter
+    {
+        public void Construct() { /* Initialize */ }
+        public void Deconstruct() { /* Cleanup */ }
+        public void SerializeChannel(byte channelValue, int channel) { }
+        public void InitFrame(ref List<byte> channelValues) { }
+        public void CompleteFrame(ref List<byte> channelValues)
+        {
+            // Export logic here
+        }
+        // ... UI methods ...
+    }
+    ```
+  </Step>
+  
+  <Step title="Choose Processing Mode">
+    Decide if you need:
+    - **Per-Channel**: Implement `SerializeChannel` (rare)
+    - **Per-Frame**: Implement `CompleteFrame` (most common)
+    - **Both**: Process in stages
+  </Step>
+  
+  <Step title="Implement Export Logic">
+    Most exporters do all work in `CompleteFrame`:
+    
+    ```csharp
+    public void CompleteFrame(ref List<byte> channelValues)
+    {
+        // Access all channels
+        for (int i = 0; i < channelValues.Count; i++)
+        {
+            byte value = channelValues[i];
+            // Send to external system
+        }
+    }
+    ```
+  </Step>
+  
+  <Step title="Handle Async Operations">
+    If exporting to network/disk, use async to avoid blocking:
+    
+    ```csharp
+    public void CompleteFrame(ref List<byte> channelValues)
+    {
+        // Copy data
+        var dataCopy = channelValues.ToArray();
+        
+        // Export async (don't wait)
+        Task.Run(() => SendToNetwork(dataCopy));
+    }
+    ```
+  </Step>
+  
+  <Step title="Add Configuration UI">
+    Create user-configurable properties:
+    
+    ```csharp
+    public void ConstructUserInterface(RectTransform rect)
+    {
+        Util.AddInputField(rect, "Server Address")
+            .WithText(serverAddress)
+            .WithCallback((v) => { serverAddress = v; });
+    }
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+Never block the main thread in an exporter. Use async/await or background threads for network I/O, file operations, or heavy processing.
+</Warning>
+
+## Exporter Patterns
+
+### Buffering Pattern
+
+Store data and export periodically:
+
+```csharp
+private Queue<byte[]> frameBuffer = new Queue<byte[]>();
+
+public void CompleteFrame(ref List<byte> channelValues)
+{
+    // Buffer frame
+    frameBuffer.Enqueue(channelValues.ToArray());
+    
+    // Export in batches
+    if (frameBuffer.Count >= 60) // Every 60 frames
+    {
+        ExportBatch(frameBuffer.ToArray());
+        frameBuffer.Clear();
+    }
+}
+```
+
+### Change Detection Pattern
+
+Only export when data changes:
+
+```csharp
+private byte[] lastFrame;
+
+public void CompleteFrame(ref List<byte> channelValues)
+{
+    if (lastFrame == null || !channelValues.SequenceEqual(lastFrame))
+    {
+        lastFrame = channelValues.ToArray();
+        ExportData(lastFrame);
+    }
+}
+```
+
+### Throttling Pattern
+
+Limit export frequency:
+
+```csharp
+private DateTime lastExport = DateTime.MinValue;
+private TimeSpan throttleInterval = TimeSpan.FromMilliseconds(100);
+
+public void CompleteFrame(ref List<byte> channelValues)
+{
+    if (DateTime.Now - lastExport > throttleInterval)
+    {
+        ExportData(channelValues);
+        lastExport = DateTime.Now;
+    }
+}
+```
+
+## Multi-Exporter Scenarios
+
+You can run multiple exporters simultaneously:
+
+**Example Configuration**:
+
+1. **MIDIDMX**: Send to VRChat world
+2. **TextFileExporter**: Log data for debugging  
+3. **TimeCodeExporter**: Sync with video playback
+
+All three receive the same DMX data and operate independently.
+
+<Tip>
+Exporters execute in configuration order, but since they don't modify data, order typically doesn't matter.
+</Tip>
+
+## Performance Considerations
+
+<AccordionGroup>
+  <Accordion title="Memory Management">
+    - Avoid allocating large objects every frame
+    - Reuse buffers and arrays where possible
+    - Use object pooling for frequently created objects
+    - Profile memory usage with Unity Profiler
+  </Accordion>
+  
+  <Accordion title="Threading">
+    - Use `Task.Run()` for heavy operations
+    - Don't access Unity objects from background threads
+    - Copy data before passing to async methods
+    - Handle thread synchronization carefully
+  </Accordion>
+  
+  <Accordion title="Network I/O">
+    - Use UDP for low-latency protocols
+    - Implement connection pooling for TCP
+    - Handle network errors gracefully
+    - Add timeout mechanisms
+  </Accordion>
+  
+  <Accordion title="Error Handling">
+    - Catch exceptions in exporters to prevent crashes
+    - Log errors for debugging
+    - Implement retry logic for transient failures
+    - Provide user feedback via UI
+  </Accordion>
+</AccordionGroup>
+
+## Exporter Configuration
+
+Exporters are configured in show files:
+
+```yaml
+exporters:
+- !MIDIDMX
+  useEditorLog: false
+  midiDevice: "loopMIDI Port"
+  channelsPerUpdate: 100
+  idleScanChannels: 10
+
+- !TextFileExporter
+  onlyNonZeroChannels: true
+```
+
+<Note>
+Like generators and serializers, exporters are discovered automatically via reflection. Simply implement `IExporter` and HNode will find it.
+</Note>
+
+## Debugging Exporters
+
+Tips for debugging exporter issues:
+
+1. **Use Debug.Log()**: Unity's logging appears in the console
+2. **Check Construct()**: Verify initialization succeeds
+3. **Monitor Frame Rate**: Heavy exporters reduce FPS
+4. **Test Independently**: Disable other exporters to isolate issues
+5. **Validate External Systems**: Ensure receiving systems are ready
+
+```csharp
+public void CompleteFrame(ref List<byte> channelValues)
+{
+    Debug.Log($"Exporting {channelValues.Count} channels");
+    // Export logic...
+}
+```
+
+<Tip>
+The TextFileExporter is useful for verifying that other exporters receive correct data. Enable it alongside your custom exporter during development.
+</Tip>

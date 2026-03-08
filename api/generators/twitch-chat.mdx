@@ -1,0 +1,96 @@
+---
+title: 'Twitch Chat'
+description: 'Display Twitch chat messages on DMX channels'
+---
+
+## Overview
+
+The `TwitchChat` generator connects to a Twitch IRC channel and displays chat messages rendered to DMX channels. It uses a circular buffer to show recent messages.
+
+## Properties
+
+<ParamField path="ChannelName" type="string" required>
+  Twitch channel name to monitor (without the # prefix).
+</ParamField>
+
+<ParamField path="chatMessages" type="EquationNumber" default="15">
+  Number of recent messages to display in the circular buffer.
+</ParamField>
+
+## Implementation
+
+From ~/workspace/source/Assets/Plugin/Generators/GeneratorTwitchChat.cs:18-52:
+
+```csharp
+public override void Construct()
+{
+    base.Construct();
+
+    buf = new CircularBuffer<Chatter>(chatMessages);
+
+    //we need a object because the IRC client needs to run on a MonoBehaviour
+    managedObject = new GameObject("TwitchChatManager");
+
+    irc = managedObject.AddComponent<IRC>();
+
+    //ugh useAnonymousLogin is private, use reflection to set it
+    var type = irc.GetType();
+    var field = type.GetField("useAnonymousLogin", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+    if (field == null)
+    {
+        Debug.LogError("Failed to find useAnonymousLogin field in IRC class.");
+        return;
+    }
+    field.SetValue(irc, true);
+
+    irc.channel = ChannelName;
+    irc.showIRCDebug = false;
+    irc.showThreadDebug = false;
+
+    irc.OnChatMessage += (sender) =>
+    {
+        buf.PushBack(sender);
+        text = "";
+        foreach (var chatter in buf)
+        {
+            text += $"{chatter.login}: {chatter.message}\n";
+        }
+    };
+}
+```
+
+## Configuration Example
+
+```yaml
+generators:
+  - !TwitchChat
+    ChannelName: "yourchannelname"
+    chatMessages: 10
+```
+
+## Features
+
+- **Anonymous Login** - No OAuth required
+- **Circular Buffer** - Shows most recent N messages
+- **Real-time Updates** - Messages appear instantly
+- **Format** - `username: message` display format
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Streamer Chat Display">
+    Show your Twitch chat in VRChat or other virtual worlds during streams.
+  </Accordion>
+  
+  <Accordion title="Community Interaction">
+    Allow virtual world attendees to see Twitch chat without leaving VR.
+  </Accordion>
+  
+  <Accordion title="Moderation Display">
+    Monitor chat messages visually during events.
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+The generator uses anonymous IRC login, so it can only read chat messages, not send them.
+</Note>

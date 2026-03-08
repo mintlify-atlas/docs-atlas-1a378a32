@@ -1,0 +1,78 @@
+---
+title: "OBS Studio Setup"
+description: "Learn how to configure OBS Studio with HNode using Spout2 for seamless texture output"
+---
+
+This guide walks you through setting up OBS Studio to capture HNode's output using the Spout2 plugin. OBS Studio is free-to-use software available on [GitHub](https://github.com/obsproject/obs-studio) or Steam.
+
+## Prerequisites
+
+- OBS Studio installed on your system
+- HNode running and configured
+- Windows operating system (Spout2 is Windows-only)
+
+## Installation
+
+<Steps>
+  <Step title="Install Spout2 Plugin">
+    Download and install the [Spout2 for OBS plugin](https://github.com/Off-World-Live/obs-spout2-plugin). This plugin enables OBS to capture textures directly from HNode via shared GPU memory.
+  </Step>
+
+  <Step title="Add Spout2 Capture Source">
+    In OBS Studio:
+    1. Click the **+** button in the Sources panel
+    2. Select **Spout2 Capture**
+    3. Name your source (e.g., "HNode Output")
+  </Step>
+
+  <Step title="Configure Spout Sender">
+    In the Spout2 Capture source properties:
+    1. Set the **SpoutSenders** field to `HNode Output` (or the custom name you configured in HNode)
+    2. Set **Composite mode** to **Default** to allow transparency from HNode
+    
+    This ensures proper alpha channel handling for transparent areas in your lighting output.
+  </Step>
+
+  <Step title="Crop and Position (Optional)">
+    To optimize your scene:
+    
+    **Method 1: Visual Cropping**
+    - Hold `Alt` (or `Left Alt`) + `Left Mouse Button` to drag and crop unused parts of the Spout2 Capture
+    - Be careful not to crop too much
+    
+    **Method 2: Precise Cropping**
+    - Right-click on the Spout2 Capture source
+    - Select **Transform** > **Edit Transform**
+    - Set precise **Crop** values (Top, Bottom, Left, Right)
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="No options in SpoutSenders dropdown">
+    If you don't see any Spout senders in the dropdown:
+    1. Ensure HNode is running
+    2. Check that HNode's Spout output is enabled
+    3. Restart your PC (Spout sometimes requires a system restart to properly register senders)
+  </Accordion>
+
+  <Accordion title="Black or transparent output">
+    - Verify the Composite mode is set to **Default**
+    - Check that the correct Spout sender name is selected
+    - Ensure HNode is actively outputting data (check the statistics panel)
+  </Accordion>
+
+  <Accordion title="Performance issues">
+    - Lower the output resolution in HNode's show configuration
+    - Reduce OBS canvas resolution to match HNode's output
+    - Close unnecessary applications to free up GPU resources
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+Now that OBS is capturing HNode's output, you can:
+- [Configure streaming](/guides/streaming) to send the output to VRChat or other platforms
+- [Set up Spout input](/guides/spout-io) if you want to feed textures into HNode
+- Fine-tune your [show configuration](/guides/show-configuration) for optimal performance

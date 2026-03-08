@@ -1,0 +1,61 @@
+---
+title: 'Text'
+description: 'Render text to DMX channels using TextMeshPro'
+---
+
+## Overview
+
+The `Text` generator renders text strings to a texture and maps the pixels to DMX channels. This allows you to display text in virtual worlds or on LED matrices.
+
+## Properties
+
+<ParamField path="text" type="string" default="">
+  The text string to render. Supports dynamic updates.
+</ParamField>
+
+<ParamField path="font" type="TMP_FontAsset">
+  TextMeshPro font asset for rendering. Configurable via UI.
+</ParamField>
+
+<ParamField path="fontSize" type="float" default="36">
+  Font size in points.
+</ParamField>
+
+<ParamField path="textColor" type="Color" default="White">
+  Color of the rendered text.
+</ParamField>
+
+## Configuration
+
+The Text generator is primarily configured through the HNode UI rather than YAML, as it requires font asset references.
+
+```yaml
+generators:
+  - !Text
+    text: "Hello World"
+```
+
+<Note>
+Font assets must be assigned in the Unity editor or through the HNode UI.
+</Note>
+
+## Use Cases
+
+- Event announcements in virtual worlds
+- Song titles and artist names
+- Countdowns and timers
+- Dynamic messaging
+
+## Related Generators
+
+<CardGroup cols={2}>
+  <Card title="Subtitle Formats" href="/api/generators/subtitle-formats">
+    Display subtitles from SRT/LRC/ASS files
+  </Card>
+  <Card title="Time" href="/api/generators/time">
+    Display current time
+  </Card>
+  <Card title="Twitch Chat" href="/api/generators/twitch-chat">
+    Display live chat messages
+  </Card>
+</CardGroup>

@@ -1,0 +1,171 @@
+---
+title: 'TextFileExporter'
+description: 'Export channel data to text files for debugging and analysis'
+---
+
+## Overview
+
+The TextFileExporter allows you to export DMX channel data to human-readable text files. This is useful for debugging fixture configurations, analyzing channel usage, or creating documentation of your lighting state.
+
+## Configuration
+
+<ParamField path="onlyNonZeroChannels" type="bool" default="false">
+  If true, only channels with non-zero values will be included in the exported file. This helps reduce file size and focus on active channels.
+</ParamField>
+
+## YAML Example
+
+```yaml
+exporters:
+  - type: TextFileExporter
+    onlyNonZeroChannels: true
+```
+
+## Usage
+
+The TextFileExporter is triggered manually through the HNode user interface:
+
+1. Enable the exporter in your YAML configuration
+2. Run HNode and navigate to the exporter settings
+3. Click "Export channels to text file" button
+4. Choose a location and filename
+5. The file will be saved with a `.chinfo` extension
+
+## File Format
+
+The exported text file contains one channel per line in the format:
+
+```
+channelIndex: channelValue
+```
+
+### Example Output
+
+```
+0.0: 255
+0.1: 128
+0.2: 64
+1.0: 200
+1.1: 150
+```
+
+Each line shows:
+- **Channel index** in universe.channel format (e.g., `0.0` = Universe 0, Channel 0)
+- **Channel value** as a byte (0-255)
+
+### With onlyNonZeroChannels
+
+When `onlyNonZeroChannels` is enabled, the output only includes active channels:
+
+```
+0.5: 255
+0.6: 200
+1.10: 128
+```
+
+All channels with value 0 are omitted from the file.
+
+## Technical Implementation
+
+```csharp
+public class TextFileExporter : IExporter
+{
+    public bool onlyNonZeroChannels = false;
+    
+    public void CompleteFrame(ref List<byte> channelValues)
+    {
+        // Stores current channel data
+        data = channelValues;
+    }
+}
+```
+
+## User Interface
+
+The exporter provides two UI elements:
+
+<ParamField path="Only export non-zero channels" type="Toggle">
+  Enable or disable filtering of zero-value channels in the export.
+</ParamField>
+
+<ParamField path="Export channels to text file" type="Button">
+  Opens a save dialog and exports the current channel state to a text file.
+</ParamField>
+
+## Use Cases
+
+### Debugging Fixture Mapping
+
+Export your channel data to verify that fixtures are mapped to the correct DMX addresses:
+
+```yaml
+exporters:
+  - type: TextFileExporter
+    onlyNonZeroChannels: true  # Only show active channels
+```
+
+Set specific fixtures to known values, export, and verify the output matches your expectations.
+
+### Documentation
+
+Create snapshots of lighting states for documentation purposes:
+
+```yaml
+exporters:
+  - type: TextFileExporter
+    onlyNonZeroChannels: false  # Include all channels
+```
+
+Capture complete channel states for different scenes or cues.
+
+### Analysis
+
+Analyze channel usage patterns:
+
+```yaml
+exporters:
+  - type: TextFileExporter
+    onlyNonZeroChannels: true  # Focus on active channels
+```
+
+Export during a show to see which channels are actively used.
+
+## File Extension
+
+The exporter uses the `.chinfo` (Channel Information) extension by default. This can be changed when saving through the file browser dialog.
+
+## Integration with Other Tools
+
+The text format is easily parseable by other tools:
+
+```python
+# Python example: Parse exported channel data
+with open('channelinfo.chinfo', 'r') as f:
+    for line in f:
+        channel, value = line.strip().split(': ')
+        print(f"Channel {channel} = {value}")
+```
+
+```javascript
+// JavaScript example: Parse exported channel data
+const fs = require('fs');
+const data = fs.readFileSync('channelinfo.chinfo', 'utf8');
+data.split('\n').forEach(line => {
+    const [channel, value] = line.split(': ');
+    console.log(`Channel ${channel} = ${value}`);
+});
+```
+
+## Performance Notes
+
+- Export is performed on-demand, not every frame
+- No performance impact during normal operation
+- Export time depends on number of channels (typically < 1 second)
+- Memory usage is minimal - only stores reference to current frame data
+
+## Limitations
+
+- Export is a snapshot of the current frame only
+- Does not support real-time streaming to file
+- No automatic export functionality (must be triggered manually)
+- File format is simple text - no binary or compressed formats supported

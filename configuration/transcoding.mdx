@@ -1,0 +1,269 @@
+---
+title: 'Transcoding'
+description: 'Convert between different pixel mapping formats'
+---
+
+## Overview
+
+Transcoding allows HNode to convert DMX data from one pixel mapping format (deserializer) to another format (serializer). This is useful when you need to:
+
+- Convert between different LED controller formats
+- Remap pixels from one layout to another
+- Transform data from a lighting console format to a custom LED format
+- Bridge incompatible pixel mapping systems
+
+## Configuration Properties
+
+<ParamField path="Transcode" type="boolean" default="false">
+  Enables or disables transcoding from the deserializer format to the serializer format.
+
+  When enabled:
+  - DMX data is received using the **deserializer** format
+  - The data is converted to a texture representation
+  - The texture is then re-serialized using the **serializer** format
+  - Output is sent in the serializer's pixel mapping format
+
+  When disabled:
+  - Data flows through without format conversion
+  - Only the deserializer is used for input
+  - Serializer is bypassed
+</ParamField>
+
+<ParamField path="TranscodeUniverseCount" type="integer" default="3">
+  The number of DMX universes to process during transcoding. This limits the amount of data being converted, which can improve performance if you only need a subset of universes.
+
+  **Common values:**
+  - `1` - Process only the first universe (512 channels)
+  - `3` - Process three universes (1536 channels) - default
+  - `8` - Process eight universes (4096 channels)
+  - Higher values for large installations with many fixtures
+
+  Each universe contains 512 DMX channels. The total number of channels processed is:
+  ```
+  Total channels = TranscodeUniverseCount × 512
+  ```
+
+  **Performance tip**: Set this to the minimum number of universes you actually need. Processing fewer universes improves performance.
+</ParamField>
+
+<ParamField path="SerializeUniverseCount" type="integer" default="2147483647">
+  The maximum number of universes that will be serialized to the output. This usually doesn't need to be changed from the default.
+
+  The default value (`2147483647` / `int.MaxValue`) means there is no practical limit on the number of universes that can be serialized.
+
+  You might want to set this to a specific value if:
+  - You need to limit output to a specific number of universes
+  - Your output system has a maximum universe count
+  - You want to prevent accidental transmission of empty universes
+</ParamField>
+
+## YAML Configuration Examples
+
+### Basic Transcoding Setup
+
+```yaml
+# Enable transcoding for 3 universes
+Transcode: true
+TranscodeUniverseCount: 3
+SerializeUniverseCount: 2147483647
+```
+
+### Disabled Transcoding
+
+```yaml
+# No format conversion
+Transcode: false
+TranscodeUniverseCount: 3
+SerializeUniverseCount: 2147483647
+```
+
+### Small Installation (1 Universe)
+
+```yaml
+# Single universe installation
+Transcode: true
+TranscodeUniverseCount: 1
+SerializeUniverseCount: 2147483647
+```
+
+### Large Installation (16 Universes)
+
+```yaml
+# Large LED installation
+Transcode: true
+TranscodeUniverseCount: 16
+SerializeUniverseCount: 2147483647
+```
+
+### Limited Output Universes
+
+```yaml
+# Transcode 8 universes but only output 4
+Transcode: true
+TranscodeUniverseCount: 8
+SerializeUniverseCount: 4
+```
+
+## Complete Configuration Example
+
+Here's a complete example showing transcoding with other configuration options:
+
+```yaml
+# Serializer and Deserializer
+Serializer: !SerializerVRSL {}
+Deserializer: !SerializerBinary {}
+
+# Enable transcoding
+Transcode: true
+TranscodeUniverseCount: 8
+SerializeUniverseCount: 2147483647
+
+# Resolution settings
+InputResolution: 1920x1080
+OutputResolution: 1920x1080
+
+# Art-Net settings
+ArtNetAddress: 0.0.0.0
+ArtNetPort: 6454
+
+# Masking settings
+maskedChannels: []
+invertMask: false
+autoMaskOnZero: false
+```
+
+## How Transcoding Works
+
+### Data Flow Without Transcoding
+
+```
+Art-Net Input → Deserializer → Texture → Display/Output
+```
+
+### Data Flow With Transcoding
+
+```
+Art-Net Input → Deserializer → Texture → Serializer → Output
+               (Format A)                  (Format B)
+```
+
+### Example: VRSL to Binary Format
+
+```yaml
+Deserializer: !SerializerVRSL {}
+Serializer: !SerializerBinary {}
+Transcode: true
+TranscodeUniverseCount: 3
+```
+
+This configuration:
+1. Receives Art-Net data in VRSL format (deserializer)
+2. Converts it to a texture representation
+3. Re-encodes the texture using Binary format (serializer)
+4. Outputs the converted data
+
+## Performance Considerations
+
+### Universe Count and Performance
+
+The `TranscodeUniverseCount` setting directly impacts performance:
+
+- **1 universe** (512 channels) = Minimal processing
+- **3 universes** (1536 channels) = Default, good balance
+- **8 universes** (4096 channels) = Moderate processing
+- **16 universes** (8192 channels) = Higher processing load
+- **32+ universes** = Significant processing, ensure adequate hardware
+
+### Optimization Tips
+
+1. **Set universe count precisely**: Only process the universes you actually use
+   ```yaml
+   TranscodeUniverseCount: 3  # If you only use 3 universes
+   ```
+
+2. **Disable when not needed**: If you don't need format conversion, disable transcoding
+   ```yaml
+   Transcode: false
+   ```
+
+3. **Match resolutions**: Ensure input and output resolutions are appropriate for your data
+   ```yaml
+   InputResolution: 1920x1080
+   OutputResolution: 1920x1080
+   ```
+
+4. **Monitor frame rate**: Check your actual frame rate and adjust if needed
+   ```yaml
+   TargetFramerate: 60
+   ```
+
+## Common Use Cases
+
+### Converting Console Output to LED Format
+
+```yaml
+Deserializer: !SerializerBinary {}
+Serializer: !SerializerVRSL {}
+Transcode: true
+TranscodeUniverseCount: 8
+```
+
+### Testing Different Formats
+
+```yaml
+# Easy switching between formats for testing
+Deserializer: !SerializerVRSL {}
+Serializer: !SerializerBinary {}
+Transcode: true
+TranscodeUniverseCount: 1
+```
+
+### Pixel Layout Remapping
+
+```yaml
+# Receive in one layout, output in another
+Deserializer: !SerializerSpiral {}
+Serializer: !SerializerTernary {}
+Transcode: true
+TranscodeUniverseCount: 4
+InputResolution: 512x512
+OutputResolution: 1024x768
+```
+
+### No Format Conversion Needed
+
+```yaml
+# Same format in and out, no transcoding needed
+Deserializer: !SerializerVRSL {}
+Serializer: !SerializerVRSL {}
+Transcode: false
+```
+
+## Troubleshooting
+
+### No Output When Transcoding
+
+1. Verify `Transcode` is set to `true`
+2. Check that both `Serializer` and `Deserializer` are configured
+3. Ensure `TranscodeUniverseCount` covers your data range
+4. Verify input resolution matches your deserializer's expectations
+
+### Performance Issues
+
+1. Reduce `TranscodeUniverseCount` to minimum needed
+2. Lower resolution settings if appropriate
+3. Check CPU/GPU usage
+4. Consider disabling transcoding if not needed
+
+### Incorrect Pixel Mapping
+
+1. Verify you're using the correct serializer/deserializer formats
+2. Check resolution settings match your pixel layout
+3. Ensure universe count covers all your fixtures
+4. Review serializer-specific configuration options
+
+## Related Settings
+
+- [Resolution](/configuration/resolution) - Input and output texture sizes affect transcoding
+- [Art-Net Settings](/configuration/artnet-settings) - Configure Art-Net input
+- [Masking](/configuration/masking) - Control which channels are visible

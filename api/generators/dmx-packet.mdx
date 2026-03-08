@@ -1,0 +1,65 @@
+---
+title: 'DMX Packet'
+description: 'Inject raw DMX packet data directly'
+---
+
+## Overview
+
+The `DMXPacket` generator allows you to inject raw DMX data directly into the channel stream. This is useful for testing, debugging, or creating custom packet sequences.
+
+## Properties
+
+<ParamField path="universe" type="int" default="0">
+  Target universe number (0-based).
+</ParamField>
+
+<ParamField path="data" type="byte[]">
+  Raw DMX data bytes (0-255 per channel).
+</ParamField>
+
+## Configuration Example
+
+```yaml
+generators:
+  - !DMXPacket
+    universe: 0
+    data: [255, 200, 150, 100, 50, 0]
+```
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Testing Serializers">
+    Send known data patterns to verify serializer behavior:
+    
+    ```yaml
+    - !DMXPacket
+      universe: 0
+      data: [0, 64, 128, 192, 255]  # Test gradient
+    ```
+  </Accordion>
+  
+  <Accordion title="Static Scenes">
+    Pre-program lighting scenes without a console:
+    
+    ```yaml
+    - !DMXPacket
+      universe: 0
+      data: [255, 255, 255, 0, 0, 0, 128, 128, 128]
+    ```
+  </Accordion>
+  
+  <Accordion title="Debugging">
+    Inject specific values to debug world implementations:
+    
+    ```yaml
+    - !DMXPacket
+      universe: 1
+      data: [170, 170, 170]  # Alternating bit pattern
+    ```
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+DMXPacket directly overwrites channel data. Place it carefully in the generator execution order.
+</Warning>

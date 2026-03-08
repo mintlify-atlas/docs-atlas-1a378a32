@@ -1,0 +1,91 @@
+---
+title: 'Exporters Overview'
+description: 'Overview of the HNode exporter system for channel data serialization'
+---
+
+## Introduction
+
+Exporters in HNode provide a flexible interface for serializing channel data to various output formats and destinations. The exporter system allows you to send DMX channel data to MIDI devices, files, or other external systems.
+
+## IExporter Interface
+
+All exporters implement the `IExporter` interface, which extends `IUserInterface<IExporter>` and `IConstructable`. This interface defines the core lifecycle methods for processing channel data:
+
+### Core Methods
+
+<ParamField path="SerializeChannel" type="void">
+  Serializes a single channel from a raw byte representation.
+  
+  **Parameters:**
+  - `channelValue` (byte): The DMX value for the channel (0-255)
+  - `channel` (int): The channel number
+</ParamField>
+
+<ParamField path="InitFrame" type="void">
+  Called at the start of each frame to reset any state.
+  
+  **Parameters:**
+  - `channelValues` (ref List\<byte\>): Reference to the list of all channel values
+</ParamField>
+
+<ParamField path="CompleteFrame" type="void">
+  Called after all channels have been serialized for the current frame. Can be used to generate CRC blocks, perform batch operations, or finalize the frame output.
+  
+  **Parameters:**
+  - `channelValues` (ref List\<byte\>): Reference to the list of all channel values
+</ParamField>
+
+### Lifecycle Methods
+
+<ParamField path="Construct" type="void">
+  Called when the exporter is initialized. Use this to set up connections, open files, or initialize resources.
+</ParamField>
+
+<ParamField path="Deconstruct" type="void">
+  Called when the exporter is being destroyed. Clean up resources, close connections, and dispose of objects here.
+</ParamField>
+
+## Available Exporters
+
+HNode includes several built-in exporters:
+
+### MIDIDMX
+
+Exports DMX channel data to VRChat worlds via MIDI using the MIDIDMX protocol. Supports up to 16,384 channels across 8 banks.
+
+[View MIDIDMX Documentation →](/api/exporters/mididmx)
+
+### TextFileExporter
+
+Exports channel data to text files for debugging, analysis, or archival purposes. Can filter to only export non-zero channels.
+
+[View TextFileExporter Documentation →](/api/exporters/text-file)
+
+### TimeCodeExporter
+
+Receives MIDI timecode and broadcasts it via UDP to synchronize external systems with time-based automation.
+
+[View TimeCodeExporter Documentation →](/api/exporters/timecode)
+
+## Using Exporters in YAML
+
+Exporters are configured in your HNode YAML configuration files:
+
+```yaml
+exporters:
+  - type: MIDIDMX
+    midiDevice: "loopMIDI Port"
+    channelsPerUpdate: 100
+    idleScanChannels: 10
+  
+  - type: TextFileExporter
+    onlyNonZeroChannels: true
+```
+
+## Frame Processing Flow
+
+1. **InitFrame** - Called at the start of the frame
+2. **SerializeChannel** - Called for each channel (may not be used by all exporters)
+3. **CompleteFrame** - Called after all channels are processed
+
+This architecture allows exporters to process data per-channel or in batch at the end of each frame.

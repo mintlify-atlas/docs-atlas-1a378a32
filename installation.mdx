@@ -1,0 +1,418 @@
+---
+title: Installation
+description: Download and set up HNode on your system
+---
+
+## System Requirements
+
+Before installing HNode, ensure your system meets these requirements:
+
+<CardGroup cols={2}>
+  <Card title="Operating System" icon="windows">
+    **Windows 10 or Windows 11 (64-bit)**
+    
+    Spout2 framework is Windows-only
+  </Card>
+  
+  <Card title="Graphics Hardware" icon="microchip">
+    **DirectX 11 compatible GPU**
+    
+    - Integrated graphics: Up to 3 universes
+    - Dedicated GPU: Recommended for 6+ universes
+    - GPU with 2GB+ VRAM for high resolution output
+  </Card>
+  
+  <Card title="Network" icon="ethernet">
+    **Network adapter**
+    
+    - Any network adapter for basic use
+    - Gigabit Ethernet recommended for high universe counts
+    - Supports both wired and wireless connections
+  </Card>
+  
+  <Card title="Software" icon="code">
+    **No additional runtime required**
+    
+    HNode is a standalone executable built with Unity 6
+  </Card>
+</CardGroup>
+
+<Note>
+  HNode has been tested on Windows 10 (version 1909+) and Windows 11. Older Windows versions may work but are not officially supported.
+</Note>
+
+## Downloading HNode
+
+<Steps>
+  <Step title="Visit GitHub Releases">
+    Navigate to the [HNode Releases page](https://github.com/Happyrobot33/HNode/releases) on GitHub.
+    
+    The releases page shows all available versions sorted by date.
+  </Step>
+  
+  <Step title="Choose a Version">
+    Select the latest release for the newest features and bug fixes, or choose a specific version if needed.
+    
+    <Tip>
+      Look for releases marked with a green "Latest" badge for the most stable version.
+    </Tip>
+  </Step>
+  
+  <Step title="Download the Build">
+    Under the "Assets" section of the release, download the appropriate file:
+    
+    - **HNode.zip** - Full Windows build (recommended)
+    - **Source code (zip)** - Only if you want to build from source
+    
+    The HNode.zip file is typically 50-100 MB in size.
+  </Step>
+  
+  <Step title="Extract the Archive">
+    Extract the downloaded ZIP file to a permanent location on your computer.
+    
+    <Warning>
+      Do not run HNode directly from the ZIP file. Always extract it first to avoid permission and file access issues.
+    </Warning>
+    
+    Recommended locations:
+    - `C:\Program Files\HNode\`
+    - `C:\Users\[YourName]\Applications\HNode\`
+    - Any location where you have full read/write permissions
+  </Step>
+</Steps>
+
+## File Structure
+
+After extraction, your HNode folder should contain:
+
+```
+HNode/
+├── HNode.exe              # Main application executable
+├── UnityCrashHandler64.exe
+├── UnityPlayer.dll
+├── HNode_Data/            # Unity application data
+│   ├── Managed/           # .NET assemblies
+│   ├── Plugins/           # Native plugins (Spout2, etc.)
+│   ├── Resources/         # Application resources
+│   └── ...
+├── MonoBleedingEdge/      # Mono runtime
+└── Assets/                # Application assets (logo, etc.)
+```
+
+<Note>
+  The `HNode_Data` folder and other files must remain in the same directory as `HNode.exe`. Do not move or delete these files.
+</Note>
+
+## First Launch
+
+<Steps>
+  <Step title="Run HNode.exe">
+    Double-click `HNode.exe` to launch the application.
+    
+    <Warning>
+      Windows may show a SmartScreen warning for unsigned applications. Click "More info" then "Run anyway" to proceed.
+    </Warning>
+  </Step>
+  
+  <Step title="Windows Firewall Prompt">
+    If prompted by Windows Firewall, **allow HNode to access the network**.
+    
+    HNode needs network access to receive ArtNet DMX data on UDP port 6454.
+    
+    - Check "Private networks" if using on a local network
+    - Check "Public networks" only if needed (not recommended for security)
+  </Step>
+  
+  <Step title="Verify Launch">
+    The HNode window should open with a resolution of 1200x600 pixels.
+    
+    You should see:
+    - Tab navigation at the top (Serializer, Generator, Exporter, Documentation)
+    - Settings panel on the left
+    - Preview window on the right
+    - Statistics overlay (FPS, RAM, Audio)
+  </Step>
+</Steps>
+
+## Optional Dependencies
+
+While HNode works standalone, these optional components enhance functionality:
+
+### Spout2 Plugin for OBS Studio
+
+To capture HNode output in OBS Studio:
+
+<Steps>
+  <Step title="Download Spout2 Plugin">
+    Get the plugin from [obs-spout2-plugin releases](https://github.com/Off-World-Live/obs-spout2-plugin/releases)
+    
+    Download the `.zip` file for your OBS version (usually the latest release).
+  </Step>
+  
+  <Step title="Install Plugin">
+    Extract the contents to your OBS Studio installation directory:
+    
+    ```
+    C:\Program Files\obs-studio\obs-plugins\64bit\
+    ```
+    
+    Or use the provided installer if available.
+  </Step>
+  
+  <Step title="Restart OBS">
+    Restart OBS Studio to load the new plugin.
+  </Step>
+  
+  <Step title="Add Spout2 Source">
+    In OBS:
+    1. Add a new Source → **Spout2 Capture**
+    2. Set **SpoutSenders** to `HNode Output`
+    3. Set **Composite mode** to "Default" (for transparency support)
+  </Step>
+</Steps>
+
+### loopMIDI (for MIDIDMX)
+
+For MIDIDMX output to VRChat:
+
+<Steps>
+  <Step title="Download loopMIDI">
+    Download from [Tobias Erichsen's website](https://www.tobias-erichsen.de/software/loopmidi.html)
+    
+    loopMIDI creates virtual MIDI ports for routing MIDI between applications.
+  </Step>
+  
+  <Step title="Install loopMIDI">
+    Run the installer and follow the installation wizard.
+  </Step>
+  
+  <Step title="Create Virtual Port">
+    1. Launch loopMIDI
+    2. Enter a port name (e.g., "loopMIDI Port")
+    3. Click the **+** button to create the port
+    4. The port should appear in the "Active Ports" list
+  </Step>
+  
+  <Step title="Configure HNode">
+    In HNode's Exporter tab:
+    1. Add a **MIDIDMX** exporter
+    2. Set the **MIDI Device** to your loopMIDI port name
+    3. The exporter will connect automatically
+  </Step>
+</Steps>
+
+<Tip>
+  Keep loopMIDI running while using MIDIDMX. The virtual MIDI port only exists while loopMIDI is active.
+</Tip>
+
+### MediaMTX (for Local Streaming)
+
+For low-latency local video streaming:
+
+<Steps>
+  <Step title="Download MediaMTX">
+    Get the latest binary from [MediaMTX releases](https://github.com/bluenviron/mediamtx/releases)
+    
+    Download the Windows `.zip` file.
+  </Step>
+  
+  <Step title="Extract and Run">
+    1. Extract to an empty folder
+    2. Run `mediamtx.exe`
+    3. A console window will open showing the server status
+  </Step>
+  
+  <Step title="Configure OBS Output">
+    In OBS Studio settings:
+    - **Service**: Custom
+    - **Server**: `rtmp://localhost/`
+    - **Stream Key**: (any text, e.g., "hnode")
+  </Step>
+  
+  <Step title="Stream URL">
+    Use this URL in video players:
+    ```
+    rtspt://localhost:8554/[your-stream-key]
+    ```
+    
+    Or for RTMP:
+    ```
+    rtmp://localhost/[your-stream-key]
+    ```
+  </Step>
+</Steps>
+
+## Network Configuration
+
+### Finding Your Network Adapter
+
+To receive ArtNet from a lighting console:
+
+<Steps>
+  <Step title="Check Your IP Address">
+    Open Command Prompt and run:
+    ```bash
+    ipconfig
+    ```
+    
+    Look for your active network adapter's IPv4 address (usually starts with 192.168.x.x or 10.x.x.x).
+  </Step>
+  
+  <Step title="Configure Lighting Console">
+    Set your lighting console's ArtNet output to:
+    - **IP Address**: Your computer's IP address or broadcast address (e.g., 192.168.1.255)
+    - **Port**: 6454 (ArtNet standard)
+    - **Universe**: Start at 0 or 1 (depends on console)
+  </Step>
+  
+  <Step title="Configure HNode">
+    In HNode:
+    - **ArtNet Address**: `0.0.0.0` (listens on all network interfaces)
+    - **ArtNet Port**: `6454` (default, only change if needed)
+  </Step>
+</Steps>
+
+<Note>
+  Using `0.0.0.0` as the ArtNet Address allows HNode to receive from any network interface automatically. This is the recommended setting for most users.
+</Note>
+
+### Firewall Rules
+
+If HNode isn't receiving ArtNet data:
+
+<Accordion title="Windows Firewall Configuration">
+  1. Open **Windows Defender Firewall** settings
+  2. Click **Allow an app through firewall**
+  3. Click **Change settings** (requires admin)
+  4. Find **HNode** in the list or click **Allow another app**
+  5. Ensure **Private** is checked (at minimum)
+  6. Click **OK**
+  
+  Alternatively, create a manual rule:
+  1. Click **Advanced settings**
+  2. Click **Inbound Rules** → **New Rule**
+  3. Rule Type: **Port**
+  4. Protocol: **UDP**, Port: **6454**
+  5. Action: **Allow the connection**
+  6. Profile: Check **Private** and optionally **Public**
+  7. Name: "HNode ArtNet"
+</Accordion>
+
+## Troubleshooting Installation
+
+<AccordionGroup>
+  <Accordion title="Application Won't Start">
+    **Symptom**: Double-clicking HNode.exe does nothing or shows an error
+    
+    **Solutions**:
+    - Ensure you've extracted the ZIP file completely
+    - Check that `HNode_Data` folder exists alongside HNode.exe
+    - Right-click HNode.exe → Properties → Unblock (if file is from internet)
+    - Try running as Administrator
+    - Check Windows Event Viewer for error details
+  </Accordion>
+  
+  <Accordion title="SmartScreen Warning">
+    **Symptom**: Windows blocks execution with "Windows protected your PC"
+    
+    **Solution**:
+    1. Click **More info**
+    2. Click **Run anyway**
+    
+    This warning appears because HNode is not code-signed. The application is safe to run.
+  </Accordion>
+  
+  <Accordion title="Graphics Initialization Failed">
+    **Symptom**: Error about DirectX or graphics initialization
+    
+    **Solutions**:
+    - Update your graphics drivers to the latest version
+    - Ensure DirectX 11 is installed (comes with Windows 10/11)
+    - Try running on integrated graphics if you have multiple GPUs
+    - Check that your GPU meets minimum requirements
+  </Accordion>
+  
+  <Accordion title="Missing DLL Errors">
+    **Symptom**: Error about missing `.dll` files
+    
+    **Solutions**:
+    - Re-extract the ZIP file completely
+    - Install [Visual C++ Redistributables](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist)
+    - Ensure Windows is up to date
+    - Check that antivirus hasn't quarantined files
+  </Accordion>
+</AccordionGroup>
+
+## Updating HNode
+
+To update to a newer version:
+
+<Steps>
+  <Step title="Save Your Configuration">
+    In HNode, click the **Save** button to export your show configuration to a `.yaml` file.
+    
+    Save it outside the HNode folder so it won't be overwritten.
+  </Step>
+  
+  <Step title="Download New Version">
+    Follow the [download steps](#downloading-hnode) above for the latest release.
+  </Step>
+  
+  <Step title="Replace Files">
+    Option A: Extract to a new folder and load your saved configuration.
+    
+    Option B: Delete the old HNode folder and extract the new version to the same location.
+  </Step>
+  
+  <Step title="Load Configuration">
+    In the new HNode version, click **Load** and select your saved `.yaml` file.
+  </Step>
+</Steps>
+
+<Warning>
+  Always save your show configuration before updating. Updates may reset settings to defaults.
+</Warning>
+
+## Building from Source
+
+For developers who want to build HNode from source:
+
+<Steps>
+  <Step title="Install Unity 6">
+    Download and install [Unity Hub](https://unity.com/download)
+    
+    Install Unity version **6000.2.7f2** or compatible 6.x version.
+  </Step>
+  
+  <Step title="Clone Repository">
+    ```bash
+    git clone https://github.com/Happyrobot33/HNode.git
+    cd HNode
+    ```
+  </Step>
+  
+  <Step title="Open in Unity">
+    1. Open Unity Hub
+    2. Click **Add** → **Add project from disk**
+    3. Select the cloned HNode folder
+    4. Wait for Unity to import all assets
+  </Step>
+  
+  <Step title="Build">
+    1. File → Build Settings
+    2. Platform: **Windows**
+    3. Architecture: **x86_64**
+    4. Click **Build**
+    5. Choose output folder
+  </Step>
+</Steps>
+
+<Note>
+  Building from source requires familiarity with Unity and C#. Pre-built releases are recommended for most users.
+</Note>
+
+## Next Steps
+
+<Card title="Quick Start Guide" icon="rocket" href="/quickstart">
+  Now that HNode is installed, follow the Quick Start guide to set up your first ArtNet to video stream.
+</Card>

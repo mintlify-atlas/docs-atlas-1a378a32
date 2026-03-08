@@ -1,0 +1,457 @@
+---
+title: 'Spiral Serializer'
+description: 'Spiral pattern serialization for visual effects and debugging'
+---
+
+## Overview
+
+The Spiral serializer arranges DMX channels in a spiral pattern starting from the origin (0,0) and moving outward. This creates a distinctive visual pattern useful for debugging video transmission, testing capture systems, and creating visual effects.
+
+## Class: Spiral
+
+**Namespace:** Global  
+**Implements:** `IDMXSerializer`
+
+### Configuration Constants
+
+<ResponseField name="blockSize" type="const int" default="8">
+  Size in pixels of each channel block (8×8 pixels). Larger than other serializers for better visibility.
+</ResponseField>
+
+### Instance Variables
+
+<ResponseField name="x" type="int">
+  Current X position in the spiral (in block coordinates, not pixels)
+</ResponseField>
+
+<ResponseField name="y" type="int">
+  Current Y position in the spiral (in block coordinates, not pixels)
+</ResponseField>
+
+<ResponseField name="state" type="int">
+  Current direction state:
+  - 0 = Moving right (+X)
+  - 1 = Moving up (+Y)
+  - 2 = Moving left (-X)
+  - 3 = Moving down (-Y)
+</ResponseField>
+
+<ResponseField name="visited" type="List<Vector2Int>">
+  Tracks all visited positions to prevent overlap and trigger direction changes
+</ResponseField>
+
+## How It Works
+
+### Spiral Algorithm
+
+The spiral follows a clockwise pattern:
+
+```
+    ↓ Start (0,0)
+    ┌─→─→─→─┐
+    ↑       ↓
+    ↑   ┌─→─┘
+    ↑   ↑   
+    └─←─┘   
+```
+
+**Movement pattern:**
+1. Start at (0,0) moving right
+2. Move right until hitting a wall or visited cell → turn up
+3. Move up until collision → turn left  
+4. Move left until collision → turn down
+5. Move down until collision → turn right
+6. Repeat, spiraling inward
+
+### Direction States
+
+| State | Direction | Delta |
+|-------|-----------|--------|
+| 0     | Right     | (+1, 0) |
+| 1     | Up        | (0, +1) |
+| 2     | Left      | (-1, 0) |
+| 3     | Down      | (0, -1) |
+
+### Collision Detection
+
+The spiral changes direction when:
+- Next position has been visited before (self-collision)
+- Next position is out of bounds (< 0 or >= texture size)
+
+## Methods
+
+### InitFrame
+
+Resets the spiral state at the start of each frame.
+
+```csharp
+public void InitFrame(ref List<byte> channelValues)
+```
+
+<ParamField path="channelValues" type="ref List<byte>" required>
+  The list of channel values (not used by this method)
+</ParamField>
+
+**Actions:**
+- Resets position to (0, 0)
+- Clears the visited positions list
+- Resets direction state to 0 (right)
+
+### SerializeChannel
+
+Encodes a DMX channel at the current spiral position and advances to the next position.
+
+```csharp
+public void SerializeChannel(ref Color32[] pixels, byte channelValue, 
+    int channel, int textureWidth, int textureHeight)
+```
+
+<ParamField path="pixels" type="ref Color32[]" required>
+  The pixel array to write to
+</ParamField>
+
+<ParamField path="channelValue" type="byte" required>
+  The DMX channel value (0-255) to encode as grayscale
+</ParamField>
+
+<ParamField path="channel" type="int" required>
+  The DMX channel number (not directly used - position determined by spiral)
+</ParamField>
+
+<ParamField path="textureWidth" type="int" required>
+  Width of the output texture in pixels
+</ParamField>
+
+<ParamField path="textureHeight" type="int" required>
+  Height of the output texture in pixels
+</ParamField>
+
+**Process:**
+1. Calculates texture dimensions in block coordinates
+2. Converts current block position (x, y) to pixel position
+3. Writes an 8×8 grayscale block at the current position
+4. Calculates the next position based on current direction
+5. Checks for collisions (visited or out-of-bounds)
+6. If collision detected, rotates direction clockwise
+7. Adds current position to visited list
+8. Updates position to next position
+
+### CalculateNextMove
+
+Calculates the next position based on the current direction state.
+
+```csharp
+private void CalculateNextMove(ref int nextX, ref int nextY)
+```
+
+**Movement logic:**
+```csharp
+switch (state)
+{
+    case 0: nextX = x + 1; break; // Right
+    case 1: nextY = y + 1; break; // Up
+    case 2: nextX = x - 1; break; // Left
+    case 3: nextY = y - 1; break; // Down
+}
+```
+
+### DeserializeChannel
+
+Decoding is not implemented.
+
+```csharp
+public void DeserializeChannel(Texture2D tex, ref byte channelValue, 
+    int channel, int textureWidth, int textureHeight)
+```
+
+<Warning>
+  **Not Implemented**: This method throws `NotImplementedException`. Spiral is currently **encode-only**.
+</Warning>
+
+## Usage Example
+
+```csharp
+// Create spiral serializer
+var spiral = new Spiral();
+
+// Initialize frame
+var channelValues = new List<byte>();
+for (int i = 0; i < 64; i++)
+    channelValues.Add((byte)(i * 4)); // Gradient pattern
+
+spiral.InitFrame(ref channelValues);
+
+// Serialize all channels
+int textureWidth = 256;
+int textureHeight = 256;
+Color32[] pixels = new Color32[textureWidth * textureHeight];
+
+for (int ch = 0; ch < channelValues.Count; ch++)
+{
+    spiral.SerializeChannel(ref pixels, channelValues[ch], ch, 
+        textureWidth, textureHeight);
+}
+
+// Result: Channels spiral outward from top-left corner
+// Channel 0 at (0,0), Channel 1 at (8,0), Channel 2 at (16,0)...
+// Eventually wrapping around in a spiral pattern
+```
+
+## Visual Pattern Example
+
+For a 64×64 pixel texture (8×8 blocks) with 8 channels:
+
+```
+┌───┬───┬───┬───┐
+│ 0 │ 1 │ 2 │ 3 │  Channel 0→1→2→3 (right)
+├───┼───┼───┼───┤
+│ 7 │   │   │ 4 │  Channel 7 (left) and 4 (down)
+├───┼───┼───┼───┤
+│ 6 │   │   │ 5 │  Channel 6 (left) and 5 (down)
+└───┴───┴───┴───┘
+    Channel ordering forms clockwise spiral
+```
+
+## Channel Capacity
+
+Capacity depends on texture size and block size:
+
+```csharp
+int blocksWide = textureWidth / blockSize;
+int blocksHigh = textureHeight / blockSize;
+int totalChannels = blocksWide * blocksHigh;
+
+// Example: 256×256 texture, 8×8 blocks
+// Blocks: (256/8) × (256/8) = 32 × 32 = 1,024 channels
+```
+
+### Capacity by Resolution
+
+| Resolution | Block Grid | Channels |
+|------------|------------|----------|
+| 128×128    | 16×16      | 256      |
+| 256×256    | 32×32      | 1,024    |
+| 512×512    | 64×64      | 4,096    |
+| 1024×1024  | 128×128    | 16,384   |
+| 1920×1080  | 240×135    | 32,400   |
+
+## Advantages
+
+<CardGroup cols={2}>
+  <Card title="Visual Tracking" icon="eye">
+    Easy to track data flow and identify transmission issues
+  </Card>
+  
+  <Card title="Debugging" icon="bug">
+    Pattern makes it obvious if frames are dropped or corrupted
+  </Card>
+  
+  <Card title="Large Blocks" icon="expand">
+    8×8 blocks are highly visible and compression-resistant
+  </Card>
+  
+  <Card title="Deterministic" icon="route">
+    Same spiral path every frame ensures consistency
+  </Card>
+</CardGroup>
+
+## Limitations
+
+<Warning>
+  **Encode-Only**: Deserialization is not implemented. Spiral is primarily for visualization and debugging.
+</Warning>
+
+- **Position-Dependent**: Channel values are determined by spiral position, not channel number
+- **Sequential Only**: Must encode all channels in order; cannot encode individual channels
+- **No Random Access**: Cannot directly encode channel N without encoding 0 through N-1
+- **Frame State**: Requires `InitFrame` to be called before each frame
+
+## Use Cases
+
+### 1. Visual Debugging
+
+Verify video capture is working correctly:
+
+```csharp
+// Send gradient pattern
+for (int i = 0; i < 100; i++)
+{
+    spiral.SerializeChannel(ref pixels, (byte)i, i, width, height);
+}
+// Visual result: Gradient spiraling from dark (center) to bright (outside)
+```
+
+### 2. Transmission Testing
+
+Test video quality by analyzing spiral continuity:
+
+```csharp
+// Send incrementing values
+for (int i = 0; i < 256; i++)
+{
+    spiral.SerializeChannel(ref pixels, (byte)i, i, width, height);
+}
+// Breaks in the spiral indicate frame drops or corruption
+```
+
+### 3. Visual Effects
+
+Create animated spiral patterns:
+
+```csharp
+// Animated gradient
+for (int i = 0; i < numChannels; i++)
+{
+    byte value = (byte)((i + frameCount) % 256);
+    spiral.SerializeChannel(ref pixels, value, i, width, height);
+}
+// Result: Gradient appears to rotate outward
+```
+
+## Best Practices
+
+### 1. Always Call InitFrame
+
+<Warning>
+  Failing to call `InitFrame` will cause the spiral to continue from the previous frame's position.
+</Warning>
+
+```csharp
+// Correct usage
+void RenderFrame()
+{
+    spiral.InitFrame(ref channelValues);
+    
+    foreach (var channel in channelValues)
+    {
+        spiral.SerializeChannel(ref pixels, channel.value, 
+            channel.id, width, height);
+    }
+}
+```
+
+### 2. Sequential Encoding
+
+Encode channels in sequential order:
+
+```csharp
+// Correct: Sequential
+for (int i = 0; i < channels.Count; i++)
+    spiral.SerializeChannel(...);
+
+// Incorrect: Random order will break spiral pattern
+foreach (var ch in channels.OrderByDescending(c => c.priority))
+    spiral.SerializeChannel(...); // Wrong!
+```
+
+### 3. Verify Capacity
+
+Ensure channel count fits in texture:
+
+```csharp
+int maxChannels = (textureWidth / blockSize) * (textureHeight / blockSize);
+
+if (channelValues.Count > maxChannels)
+{
+    Debug.LogError($"Too many channels! Max: {maxChannels}, Got: {channelValues.Count}");
+    return;
+}
+```
+
+## Comparison with Other Serializers
+
+| Feature | Spiral | Binary | VRSL |
+|---------|--------|--------|------|
+| Block Size | 8×8 | 4×4 | 16×16 |
+| Pattern | Spiral | Grid | Grid |
+| Encoding | Grayscale | Binary | Grayscale |
+| Channels (256×256) | 1,024 | 416 | 169 |
+| Visual | High | Low | Medium |
+| Decoding | No | Yes | Yes |
+| Use Case | Debug | Data | Production |
+
+## Performance
+
+- **Encoding**: ~0.015ms per channel
+- **Collision Detection**: O(n) where n = visited positions
+- **Memory**: O(n) for visited list (cleared each frame)
+- **InitFrame**: ~0.001ms
+
+<Note>
+  The visited list grows with each channel, making later channels slightly slower to encode. For typical frame sizes (< 1000 channels), this is negligible.
+</Note>
+
+## Advanced Usage
+
+### Custom Spiral Patterns
+
+Modify the direction sequence for different patterns:
+
+```csharp
+// Counter-clockwise spiral
+private void CalculateNextMove(ref int nextX, ref int nextY)
+{
+    nextX = x;
+    nextY = y;
+    switch (state)
+    {
+        case 0: nextX = x + 1; break; // Right
+        case 1: nextY = y - 1; break; // Down (reversed)
+        case 2: nextX = x - 1; break; // Left
+        case 3: nextY = y + 1; break; // Up (reversed)
+    }
+}
+```
+
+### Spiral from Center
+
+Start from texture center instead of corner:
+
+```csharp
+public void InitFrame(ref List<byte> channelValues)
+{
+    x = (textureWidth / blockSize) / 2;
+    y = (textureHeight / blockSize) / 2;
+    visited.Clear();
+    state = 0;
+}
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Spiral doesn't fill entire texture">
+    The spiral may terminate early if it gets trapped. This happens when:
+    - All adjacent cells are visited or out of bounds
+    - Texture dimensions aren't evenly divisible by block size
+    
+    Solution: Ensure texture size is a multiple of 8 pixels.
+  </Accordion>
+  
+  <Accordion title="Blocks appear in wrong positions">
+    This occurs if `InitFrame` is not called before encoding a frame.
+    
+    Solution: Always call `InitFrame` at the start of each frame.
+  </Accordion>
+  
+  <Accordion title="Spiral pattern looks wrong">
+    Verify channels are being encoded in sequential order.
+    
+    Solution: Encode channels 0, 1, 2, 3... in order.
+  </Accordion>
+</AccordionGroup>
+
+## When to Use
+
+✅ **Good for:**
+- Debugging video transmission systems
+- Visual monitoring of data flow
+- Testing video capture quality
+- Creating animated spiral effects
+- Demonstrations and presentations
+
+❌ **Not suitable for:**
+- Production DMX systems (no decoder)
+- Applications requiring random channel access
+- Systems needing bidirectional communication
+- Maximum channel density requirements

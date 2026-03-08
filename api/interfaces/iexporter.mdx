@@ -1,0 +1,404 @@
+---
+title: IExporter
+description: Interface for exporting DMX channel data to external formats and systems
+---
+
+## Overview
+
+`IExporter` is the core interface for implementing custom DMX data export functionality. Exporters process DMX channel data frame-by-frame and can output it to files, network protocols, hardware interfaces, or any other external system.
+
+## When to Implement
+
+Implement `IExporter` when you need to:
+
+- Export DMX data to text files or custom file formats
+- Send DMX data to external hardware or software via network protocols
+- Log DMX values for debugging or analysis
+- Interface with third-party lighting control systems
+- Generate reports or documentation from DMX data
+- Implement custom output protocols
+
+## Interface Definition
+
+```csharp
+public interface IExporter : IUserInterface<IExporter>, IConstructable
+{
+    void SerializeChannel(byte channelValue, int channel);
+    void InitFrame(ref List<byte> channelValues);
+    void CompleteFrame(ref List<byte> channelValues);
+}
+```
+
+## Methods
+
+### SerializeChannel
+
+Called for each DMX channel during frame processing. Use this to process individual channel values as they're being exported.
+
+<ParamField path="channelValue" type="byte" required>
+  The DMX channel value (0-255) being exported.
+</ParamField>
+
+<ParamField path="channel" type="int" required>
+  The channel index (0-511) being exported.
+</ParamField>
+
+```csharp
+public void SerializeChannel(byte channelValue, int channel)
+{
+    // Process individual channels if needed
+    // Most exporters leave this empty and process all channels in CompleteFrame
+}
+```
+
+### InitFrame
+
+Called at the start of each frame before any channels are processed. Use this to prepare for a new frame of data.
+
+<ParamField path="channelValues" type="ref List<byte>" required>
+  The complete list of all channel values for the frame. Can be used for preprocessing.
+</ParamField>
+
+```csharp
+public void InitFrame(ref List<byte> channelValues)
+{
+    // Reset any frame-specific state
+    // Prepare buffers or data structures for the new frame
+}
+```
+
+### CompleteFrame
+
+Called after all channels have been processed for the current frame. This is where most export logic typically happens.
+
+<ParamField path="channelValues" type="ref List<byte>" required>
+  The complete list of all channel values that were processed in this frame.
+</ParamField>
+
+```csharp
+public void CompleteFrame(ref List<byte> channelValues)
+{
+    // Access all channel data
+    // Write to file, send to network, etc.
+}
+```
+
+## Complete Implementation Examples
+
+### Example 1: Text File Exporter
+
+This exporter saves DMX channel values to a text file:
+
+```csharp
+using System.Collections.Generic;
+using SFB;
+using UnityEngine;
+
+public class TextFileExporter : IExporter
+{
+    public bool onlyNonZeroChannels = false;
+    private List<byte> data;
+
+    public void Construct() { }
+    public void Deconstruct() { }
+
+    public void InitFrame(ref List<byte> channelValues) { }
+    
+    public void SerializeChannel(byte channelValue, int channel) { }
+
+    public void CompleteFrame(ref List<byte> channelValues)
+    {
+        // Store the current frame data
+        data = channelValues;
+    }
+
+    public void ConstructUserInterface(RectTransform rect)
+    {
+        // Toggle for filtering zero channels
+        Util.AddToggle(rect, "Only export non-zero channels")
+            .WithValue(onlyNonZeroChannels)
+            .WithCallback((value) => onlyNonZeroChannels = value);
+
+        // Export button
+        Util.AddButton(rect, "Export channels to text file")
+            .WithCallback(() =>
+            {
+                var extensions = new[] {
+                    new ExtensionFilter("Channel Information", "chinfo"),
+                };
+                var path = StandaloneFileBrowser.SaveFilePanel(
+                    "Save File", "", "channelinfo.chinfo", extensions
+                );
+
+                // Build channel dictionary
+                Dictionary<DMXChannel, byte> channelDict = new Dictionary<DMXChannel, byte>();
+                foreach (var channel in data)
+                {
+                    channelDict[(DMXChannel)channelDict.Count] = channel;
+                }
+
+                // Filter zero channels if requested
+                if (onlyNonZeroChannels)
+                {
+                    var keysToRemove = new List<DMXChannel>();
+                    foreach (var key in channelDict.Keys)
+                    {
+                        if (channelDict[key] == 0)
+                        {
+                            keysToRemove.Add(key);
+                        }
+                    }
+                    foreach (var key in keysToRemove)
+                    {
+                        channelDict.Remove(key);
+                    }
+                }
+
+                // Write to file
+                List<string> lines = new List<string>();
+                foreach (var line in channelDict.Keys)
+                {
+                    lines.Add($"{(string)line}: {channelDict[line]}");
+                }
+
+                System.IO.File.WriteAllLines(path, lines);
+            });
+    }
+
+    public void DeconstructUserInterface() { }
+    public void UpdateUserInterface() { }
+}
+```
+
+### Example 2: CSV Logger Exporter
+
+This exporter logs DMX values to a CSV file over time:
+
+```csharp
+using System.Collections.Generic;
+using System.IO;
+using UnityEngine;
+
+public class CSVLoggerExporter : IExporter
+{
+    public string outputPath = "dmx_log.csv";
+    public bool isRecording = false;
+    
+    private StreamWriter writer;
+    private int frameCount = 0;
+
+    public void Construct() { }
+    
+    public void Deconstruct()
+    {
+        StopRecording();
+    }
+
+    public void InitFrame(ref List<byte> channelValues) { }
+    
+    public void SerializeChannel(byte channelValue, int channel) { }
+
+    public void CompleteFrame(ref List<byte> channelValues)
+    {
+        if (!isRecording || writer == null) return;
+
+        // Write frame number and all channel values
+        writer.Write(frameCount++);
+        writer.Write(",");
+        writer.Write(Time.time);
+        
+        foreach (var value in channelValues)
+        {
+            writer.Write(",");
+            writer.Write(value);
+        }
+        writer.WriteLine();
+        writer.Flush();
+    }
+
+    private void StartRecording()
+    {
+        writer = new StreamWriter(outputPath);
+        frameCount = 0;
+        
+        // Write header
+        writer.Write("Frame,Time");
+        for (int i = 0; i < 512; i++)
+        {
+            writer.Write($",Ch{i}");
+        }
+        writer.WriteLine();
+        
+        isRecording = true;
+    }
+
+    private void StopRecording()
+    {
+        if (writer != null)
+        {
+            writer.Close();
+            writer = null;
+        }
+        isRecording = false;
+    }
+
+    public void ConstructUserInterface(RectTransform rect)
+    {
+        Util.AddInputField(rect, "Output Path")
+            .WithText(outputPath)
+            .WithCallback((value) => outputPath = value);
+
+        Util.AddButton(rect, "Start Recording")
+            .WithCallback(() => StartRecording());
+
+        Util.AddButton(rect, "Stop Recording")
+            .WithCallback(() => StopRecording());
+    }
+
+    public void DeconstructUserInterface() { }
+    public void UpdateUserInterface() { }
+}
+```
+
+### Example 3: Network UDP Exporter
+
+This exporter sends DMX data over UDP (e.g., for Art-Net or sACN):
+
+```csharp
+using System.Collections.Generic;
+using System.Net;
+using System.Net.Sockets;
+using UnityEngine;
+
+public class UDPExporter : IExporter
+{
+    public string targetIP = "127.0.0.1";
+    public int targetPort = 6454;
+    
+    private UdpClient udpClient;
+    private IPEndPoint endPoint;
+
+    public void Construct()
+    {
+        udpClient = new UdpClient();
+        UpdateEndpoint();
+    }
+
+    public void Deconstruct()
+    {
+        if (udpClient != null)
+        {
+            udpClient.Close();
+            udpClient = null;
+        }
+    }
+
+    public void InitFrame(ref List<byte> channelValues) { }
+    
+    public void SerializeChannel(byte channelValue, int channel) { }
+
+    public void CompleteFrame(ref List<byte> channelValues)
+    {
+        if (udpClient == null || endPoint == null) return;
+
+        try
+        {
+            // Convert list to byte array
+            byte[] data = channelValues.ToArray();
+            
+            // Send via UDP
+            udpClient.Send(data, data.Length, endPoint);
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"UDP send failed: {e.Message}");
+        }
+    }
+
+    private void UpdateEndpoint()
+    {
+        try
+        {
+            endPoint = new IPEndPoint(IPAddress.Parse(targetIP), targetPort);
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"Invalid IP address: {e.Message}");
+        }
+    }
+
+    public void ConstructUserInterface(RectTransform rect)
+    {
+        Util.AddInputField(rect, "Target IP")
+            .WithText(targetIP)
+            .WithCallback((value) =>
+            {
+                targetIP = value;
+                UpdateEndpoint();
+            });
+
+        Util.AddInputField(rect, "Target Port")
+            .WithText(targetPort.ToString())
+            .WithCallback((value) =>
+            {
+                if (int.TryParse(value, out int result))
+                {
+                    targetPort = result;
+                    UpdateEndpoint();
+                }
+            });
+    }
+
+    public void DeconstructUserInterface() { }
+    public void UpdateUserInterface() { }
+}
+```
+
+## Inherited Interfaces
+
+### IUserInterface\<IExporter\>
+
+Exporters can provide custom UI elements for configuration through methods like `ConstructUserInterface()`, `DeconstructUserInterface()`, and `UpdateUserInterface()`.
+
+### IConstructable
+
+Exporters must implement lifecycle methods `Construct()` and `Deconstruct()` for resource management and initialization.
+
+## Best Practices
+
+1. **Resource Management**: Always clean up resources (files, network connections) in `Deconstruct()`
+2. **Error Handling**: Wrap I/O operations in try-catch blocks and log errors appropriately
+3. **Performance**: Avoid heavy processing in `CompleteFrame()` as it's called every frame
+4. **Buffering**: Consider buffering data if writing to disk or network to improve performance
+5. **User Feedback**: Provide UI elements to show export status and handle errors gracefully
+6. **Thread Safety**: Be careful with threading if performing async operations
+
+## Frame Processing Flow
+
+The exporter methods are called in this order each frame:
+
+```
+1. InitFrame(channelValues)
+2. SerializeChannel(value, 0)
+3. SerializeChannel(value, 1)
+   ...
+4. SerializeChannel(value, 511)
+5. CompleteFrame(channelValues)
+```
+
+Most exporters only implement `CompleteFrame()` since it provides access to all channel data at once.
+
+## Common Use Cases
+
+- **File Export**: Save DMX snapshots or sequences to disk
+- **Network Protocols**: Send DMX via Art-Net, sACN, or custom protocols
+- **Logging**: Record DMX data for analysis or playback
+- **Hardware Interfaces**: Communicate with DMX hardware via serial or USB
+- **Third-Party Integration**: Export to other lighting software formats
+- **Debugging**: Output channel values for troubleshooting
+
+## See Also
+
+- [IDMXSerializer](/api/interfaces/idmx-serializer) - Serialize DMX data to video
+- [IDMXGenerator](/api/interfaces/idmx-generator) - Generate DMX data
+- [Exporters Concept](/concepts/exporters) - Understanding the exporter system

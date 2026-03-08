@@ -1,0 +1,355 @@
+---
+title: Art-Net & DMX
+description: Understanding the Art-Net protocol, DMX universes, channels, and how HNode receives lighting data
+---
+
+## What is Art-Net?
+
+Art-Net is a network protocol for transmitting DMX512 lighting control data over Ethernet and Wi-Fi networks. Developed by Artistic Licence, it enables lighting consoles, visualizers, and control software to communicate with lighting fixtures over standard IP networks.
+
+<CardGroup cols={2}>
+  <Card title="Protocol" icon="network-wired">
+    UDP-based protocol on port 6454 (default)
+  </Card>
+  <Card title="Transport" icon="ethernet">
+    Standard Ethernet/Wi-Fi (IPv4)
+  </Card>
+  <Card title="Data Rate" icon="gauge-high">
+    Up to 44 Hz typical refresh rate
+  </Card>
+  <Card title="Capacity" icon="expand">
+    32,768 universes × 512 channels = 16.7M channels
+  </Card>
+</CardGroup>
+
+## DMX512 Basics
+
+DMX512 (Digital Multiplex 512) is the foundation protocol that Art-Net encapsulates.
+
+### Universe Structure
+
+A **DMX universe** contains exactly **512 channels**, numbered 1-512 in DMX terminology or 0-511 in zero-indexed programming.
+
+```
+Universe 0: Channels 0-511   (DMX 1-512)
+Universe 1: Channels 512-1023 (DMX 1-512)
+Universe 2: Channels 1024-1535 (DMX 1-512)
+...
+```
+
+### Channel Values
+
+Each channel is an 8-bit value (0-255):
+
+- **0**: Off / Minimum
+- **128**: 50% intensity
+- **255**: Full / Maximum
+
+<Tip>
+In HNode's internal representation, channels are zero-indexed and stored in a contiguous List\<byte\>, making Universe 3, Channel 5 accessible at index `(3 × 512) + 5 = 1541`.
+</Tip>
+
+## Art-Net in HNode
+
+HNode uses the `ArtNetReceiver` component to listen for Art-Net packets on the network.
+
+### Network Configuration
+
+<Steps>
+  <Step title="Bind Address">
+    Configure the IP address HNode listens on:
+    
+    - **0.0.0.0** (Default): Listen on all network interfaces
+    - **Specific IP**: Listen only on that interface (e.g., 192.168.1.100)
+    
+    ```csharp ArtNetReceiver.cs:58-62
+    public void ChangeIPAddress(IPAddress address)
+    {
+        ArtNetLogger.LogInfo("ArtNetReceiver", 
+            $"Changing IP Address from {UdpReceiver.Address} to {address}");
+        UdpReceiver.ChangeIPAddress(address);
+    }
+    ```
+  </Step>
+  
+  <Step title="Port Configuration">
+    Art-Net uses UDP port **6454** by default, but HNode allows customization:
+    
+    ```csharp ArtNetReceiver.cs:48-53
+    public void ChangePort(int port)
+    {
+        ArtNetLogger.LogInfo("ArtNetReceiver", 
+            $"Changing port from {UdpReceiver.Port} to {port}");
+        UdpReceiver.ChangePort(port);
+    }
+    ```
+  </Step>
+  
+  <Step title="Automatic Discovery">
+    HNode responds to Art-Net Poll packets, allowing lighting consoles to automatically discover it on the network.
+  </Step>
+</Steps>
+
+### Packet Reception
+
+When an Art-Net packet arrives, HNode processes it through the following flow:
+
+<Steps>
+  <Step title="UDP Reception">
+    The `UdpReceiver` receives raw bytes from the network socket.
+  </Step>
+  
+  <Step title="Packet Parsing">
+    The `ArtNetPacket.Create()` method parses the header and identifies the packet type (DMX, Poll, PollReply).
+    
+    ```csharp ArtNetReceiver.cs:74-94
+    private void OnReceivedPacket(byte[] receiveBuffer, int length, EndPoint remoteEp)
+    {
+        var packet = ArtNetPacket.Create(receiveBuffer);
+        if (packet == null) return;
+        LastReceivedAt = DateTime.Now;
+        
+        switch (packet.OpCode)
+        {
+            case OpCode.Dmx:
+                _onReceivedDmxEvent?.Invoke(ReceivedData<DmxPacket>(packet, remoteEp));
+                break;
+            case OpCode.Poll:
+                _onReceivedPollEvent.Invoke(ReceivedData<PollPacket>(packet, remoteEp));
+                break;
+            // ...
+        }
+    }
+    ```
+  </Step>
+  
+  <Step title="Universe Storage">
+    The `DmxManager` stores the 512-byte DMX data in a dictionary keyed by universe number.
+    
+    ```csharp DmxManager.cs:64-75
+    public void ReceivedDmxPacket(ReceivedData<DmxPacket> receivedData)
+    {
+        var packet = receivedData.Packet;
+        var universe = packet.Universe;
+        if (!DmxDictionary.ContainsKey(universe)) 
+            DmxDictionary.Add(universe, packet.Dmx);
+        Buffer.BlockCopy(packet.Dmx, 0, DmxDictionary[universe], 0, 512);
+    }
+    ```
+  </Step>
+</Steps>
+
+<Note>
+HNode only stores universes that have been received. Empty universes don't consume memory until their first packet arrives.
+</Note>
+
+## DMX Universe Management
+
+The `DmxManager` provides a clean interface for accessing DMX data:
+
+### Accessing Universe Data
+
+```csharp
+// Get all active universes
+ushort[] universes = dmxManager.Universes();
+
+// Get DMX values for a specific universe
+byte[] dmxValues = dmxManager.DmxValues(universe: 2);
+// Returns 512-byte array (returns zeros if universe doesn't exist)
+```
+
+### Universe Merging
+
+During rendering, HNode merges all universes into a single contiguous list:
+
+```csharp TextureWriter.cs:80-95
+var universeCount = dmxManager.Universes().Max() + 1;
+mergedDmxValues.Capacity = universeCount * 512;
+
+for (ushort u = 0; u < universeCount; u++)
+{
+    byte[] dmxValues = dmxManager.DmxValues(u);
+    mergedDmxValues.AddRange(dmxValues);
+}
+```
+
+This creates a flat channel array:
+
+```
+[Universe 0: ch0-511][Universe 1: ch0-511][Universe 2: ch0-511]...
+```
+
+## Channel Addressing
+
+HNode supports multiple channel addressing formats:
+
+### Global Index
+
+A single integer representing the absolute channel position:
+
+```yaml
+channel: 1541  # Channel 1541 globally
+```
+
+### Universe.Channel Notation
+
+Dotted notation for clarity:
+
+```yaml
+channel: 3.5  # Universe 3, Channel 5
+```
+
+### Equation Support
+
+Channel values can use mathematical expressions:
+
+```yaml
+channel: (3 * 2).(5 * 5)  # Universe 6, Channel 25
+```
+
+<Warning>
+DMX fixtures use 1-indexed channels (1-512), but HNode internally uses 0-indexed (0-511). When configuring fixtures, subtract 1 from the DMX channel number.
+</Warning>
+
+## Art-Net Discovery & Polling
+
+HNode implements the Art-Net discovery protocol, allowing it to be automatically found by lighting consoles.
+
+### Poll Response
+
+When a Poll packet is received, HNode responds with device information:
+
+```csharp DmxManager.cs:96-125
+var responsePacket = new PollReplyPacket
+{
+    IpAddress = ipBytes,
+    Port = ArtNetReceiver.Port,
+    VersionInfo = 0x0000,
+    NetSwitch = 0,
+    SubSwitch = 0,
+    Status1 = status,
+    ShortName = "HNode",
+    LongName = "HNode by Happyrobot33",
+    NodeReport = "All systems functional",
+    NumPorts = ushort.MaxValue,
+    // ...
+};
+```
+
+This allows lighting consoles to:
+
+- Discover HNode on the network
+- Display it in device lists
+- Show connection status
+- Configure universe routing
+
+### Connection Status
+
+HNode tracks whether Art-Net data is being received:
+
+```csharp ArtNetReceiver.cs:37-38
+public DateTime LastReceivedAt { get; private set; }
+public bool IsConnected => LastReceivedAt.AddSeconds(1) > DateTime.Now;
+```
+
+<Tip>
+If `IsConnected` is false, check:
+1. Art-Net source is sending to the correct IP/port
+2. Firewall isn't blocking UDP 6454
+3. Network interfaces are configured correctly
+</Tip>
+
+## Performance & Throughput
+
+HNode displays real-time performance metrics:
+
+```csharp TextureWriter.cs:166-172
+frameTime.text = $"Serialization Time: {timer.ElapsedMilliseconds} ms";
+frameTime.text += $"\nDMX Channels: {mergedDmxValues.Count}";
+var bytesPerSecond = mergedDmxValues.Count / UnityEngine.Time.smoothDeltaTime;
+var prettyBytes = ByteSize.FromBytes(bytesPerSecond).ToString("0.##");
+frameTime.text += $"\nData Throughput: {prettyBytes}/s";
+```
+
+### Typical Performance
+
+<CardGroup cols={3}>
+  <Card title="3 Universes">
+    1,536 channels
+    
+    ~90 KB/s @ 60 FPS
+  </Card>
+  <Card title="10 Universes">
+    5,120 channels
+    
+    ~300 KB/s @ 60 FPS
+  </Card>
+  <Card title="32 Universes">
+    16,384 channels
+    
+    ~960 KB/s @ 60 FPS
+  </Card>
+</CardGroup>
+
+## Multi-Universe Example
+
+Here's how a typical stage lighting setup maps to universes:
+
+```
+Universe 0: House lights (128 channels)
+Universe 1: Stage wash fixtures (256 channels)
+Universe 2: Moving heads (180 channels)
+Universe 3: LED strips (512 channels)
+Universe 4: Effects projectors (96 channels)
+```
+
+HNode receives all five universes, merges them into a 2,560-channel array, processes through generators, and serializes to video:
+
+<Steps>
+  <Step title="Art-Net In">
+    5 universes received over network
+  </Step>
+  <Step title="Merge">
+    Flattened to channels 0-2559
+  </Step>
+  <Step title="Process">
+    Generators modify specific channel ranges
+  </Step>
+  <Step title="Serialize">
+    VRSL converts to 1920×1080 texture
+  </Step>
+  <Step title="Output">
+    Spout sends to VRChat/Unity
+  </Step>
+</Steps>
+
+## Troubleshooting Art-Net
+
+<AccordionGroup>
+  <Accordion title="No Art-Net Data Received">
+    1. Check HNode is listening on the correct IP (0.0.0.0 for all interfaces)
+    2. Verify Art-Net source is sending to the correct port (6454 default)
+    3. Disable Windows Firewall or add exception for UDP 6454
+    4. Ensure no other application is using port 6454
+    5. Try binding to a specific IP instead of 0.0.0.0
+  </Accordion>
+  
+  <Accordion title="Universes Not Appearing">
+    1. Check `SerializeUniverseCount` is high enough in show config
+    2. Verify Art-Net source is sending the correct universe numbers
+    3. Use the DmxManagerViewer editor tool to inspect received universes
+    4. Ensure universe numbers don't exceed HNode's capacity
+  </Accordion>
+  
+  <Accordion title="Stuttering or Frame Drops">
+    1. Reduce `SerializeUniverseCount` to only needed universes
+    2. Lower target framerate to 30 FPS
+    3. Use a more efficient serializer (Binary instead of VRSL)
+    4. Disable unnecessary generators and exporters
+    5. Check network bandwidth if receiving many universes
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+Art-Net is a registered trademark of Artistic Licence Holdings Ltd. HNode is an independent implementation and is not affiliated with Artistic Licence.
+</Note>

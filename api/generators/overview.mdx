@@ -1,0 +1,85 @@
+---
+title: 'Generators Overview'
+description: 'Overview of the HNode generator system for DMX data generation'
+---
+
+## Introduction
+
+Generators in HNode provide a powerful interface for creating and modifying DMX channel data programmatically. The generator system allows you to produce DMX signals from various sources including time-based effects, text, Twitch chat, subtitle files, and more.
+
+## IDMXGenerator Interface
+
+All generators implement the `IDMXGenerator` interface, which extends `IUserInterface\<IDMXGenerator\>` and `IConstructable`:
+
+```csharp
+public interface IDMXGenerator : IUserInterface<IDMXGenerator>, IConstructable
+{
+    void GenerateDMX(ref List<byte> dmxData);
+}
+```
+
+### Methods
+
+<ParamField path="GenerateDMX" type="void">
+  Called every frame to generate or modify DMX channel data.
+  
+  **Parameters:**
+  - `dmxData` (ref List\<byte\>): Reference to the list of DMX channel values (0-255)
+</ParamField>
+
+## Available Generators
+
+<CardGroup cols={2}>
+  <Card title="Static Value" href="/api/generators/static-value" icon="square">
+    Set a range of channels to a constant value
+  </Card>
+  <Card title="Fade" href="/api/generators/fade" icon="circle-half-stroke">
+    Fade channels in or out over time
+  </Card>
+  <Card title="Strobe" href="/api/generators/strobe" icon="bolt">
+    Create strobe effects at configurable frequencies
+  </Card>
+  <Card title="Remap" href="/api/generators/remap" icon="shuffle">
+    Remap channel values with transformations
+  </Card>
+  <Card title="Text" href="/api/generators/text" icon="font">
+    Render text to DMX channels
+  </Card>
+  <Card title="Time" href="/api/generators/time" icon="clock">
+    Output current time to DMX channels
+  </Card>
+  <Card title="Twitch Chat" href="/api/generators/twitch-chat" icon="message">
+    Display Twitch chat messages
+  </Card>
+  <Card title="DMX Packet" href="/api/generators/dmx-packet" icon="network-wired">
+    Inject raw DMX packet data
+  </Card>
+  <Card title="Subtitle Formats" href="/api/generators/subtitle-formats" icon="closed-captioning">
+    Display subtitles from SRT, LRC, and ASS files
+  </Card>
+</CardGroup>
+
+## Generator Execution Order
+
+Generators are executed in the order they appear in the `ShowConfiguration.Generators` list. Each generator receives the current state of the DMX data and can modify it. This allows for powerful chaining effects.
+
+<Note>
+Generators execute **after** ArtNet data is received, so they can override or modify incoming DMX values.
+</Note>
+
+## YAML Configuration
+
+Generators are configured in the show configuration file:
+
+```yaml
+generators:
+  - !StaticValue
+    channelStart: 1
+    channelEnd: 10
+    value: 255
+  - !Strobe
+    channel: 15
+    frequency: 5.0
+    valueOn: 255
+    valueOff: 0
+```

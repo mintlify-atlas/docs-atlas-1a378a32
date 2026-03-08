@@ -1,80 +1,711 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start
+description: Get your first ArtNet to video stream running in minutes
 ---
 
-## Get started in three steps
+## Overview
 
-Get your documentation site running locally and make your first customization.
-
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+This guide will walk you through setting up HNode to receive ArtNet DMX data and output it as a video stream. You'll go from zero to a working visualization in just a few minutes.
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  This guide assumes you have already [installed HNode](/installation). If not, complete the installation first.
 </Note>
+
+## What You'll Build
+
+By the end of this guide, you'll have:
+
+- HNode receiving ArtNet DMX data on your network
+- A live video visualization of your DMX channels
+- Spout2 output ready for OBS or other applications
+- Understanding of the basic workflow
+
+## Step 1: Launch HNode
+
+<Steps>
+  <Step title="Start the Application">
+    Double-click `HNode.exe` to launch.
+    
+    The application window opens at 1200x600 resolution with the default VRSL serializer active.
+  </Step>
+  
+  <Step title="Familiarize with the Interface">
+    The HNode interface has four main areas:
+    
+    <CardGroup cols={2}>
+      <Card title="Tab Navigation" icon="bars">
+        Top of the window: Switch between Serializer, Generator, Exporter, and Documentation tabs
+      </Card>
+      <Card title="Settings Panel" icon="sliders">
+        Left side: Configuration options for the selected component
+      </Card>
+      <Card title="Preview Window" icon="tv">
+        Right side: Live preview of the rendered output
+      </Card>
+      <Card title="Statistics Overlay" icon="chart-line">
+        Bottom right: Real-time FPS, RAM, and audio levels (Graphy)
+      </Card>
+    </CardGroup>
+  </Step>
+  
+  <Step title="Verify Default Settings">
+    On the **Serializer** tab, check the default settings:
+    
+    ```yaml
+    Serializer Type: VRSL
+    ArtNet Port: 6454
+    ArtNet Address: 0.0.0.0
+    Spout Output Name: HNode Output
+    Output Resolution: 1920x1080
+    Target Framerate: 60
+    ```
+    
+    These defaults work for most use cases.
+  </Step>
+</Steps>
+
+## Step 2: Configure Network Settings
+
+<Steps>
+  <Step title="Set ArtNet Address">
+    In the Serializer tab, locate the **ArtNet Address** field.
+    
+    <Tip>
+      The default `0.0.0.0` listens on all network interfaces. This is recommended for beginners.
+    </Tip>
+    
+    If you need to listen on a specific interface:
+    1. Find your computer's IP address (e.g., `192.168.1.100`)
+    2. Enter it in the **ArtNet Address** field
+    3. Press Enter to apply
+  </Step>
+  
+  <Step title="Verify ArtNet Port">
+    The **ArtNet Port** should be `6454` (the ArtNet standard).
+    
+    <Warning>
+      Only change this if your lighting console uses a non-standard port.
+    </Warning>
+  </Step>
+  
+  <Step title="Configure Your Lighting Console">
+    On your lighting console or software (e.g., QLC+, LightJams, etc.):
+    
+    1. Set **ArtNet Output** to enabled
+    2. Set **IP Address** to:
+       - Your computer's IP (e.g., `192.168.1.100`), or
+       - Broadcast address (e.g., `192.168.1.255`), or
+       - `127.0.0.1` if console is on the same computer
+    3. Set **Port** to `6454`
+    4. Set **Universe** to `0` (or `1` depending on console)
+  </Step>
+</Steps>
+
+## Step 3: Choose a Serializer
+
+Serializers define how DMX channels are mapped to video pixels. Choose based on your target platform:
+
+<Tabs>
+  <Tab title="VRSL (VRChat)">
+    **Best for**: VRChat worlds using VRSL lighting systems
+    
+    <Steps>
+      <Step title="Select VRSL">
+        In the Serializer dropdown, select **VRSL** (default).
+      </Step>
+      
+      <Step title="Configure Layout">
+        Click **Cycle Output Config** to choose:
+        - `HorizontalTop` - Standard horizontal layout (default)
+        - `HorizontalBottom` - Bottom-aligned horizontal
+        - `VerticalLeft` - Left-aligned vertical
+        - `VerticalRight` - Right-aligned vertical
+        
+        <Note>
+          Match this to your VRChat world's expected layout.
+        </Note>
+      </Step>
+      
+      <Step title="Optional: RGB Grid Mode">
+        Enable **RGB Grid Mode** if your world uses RGB color encoding:
+        - Spreads 3 universes across R, G, B channels
+        - Triples effective channel density
+        - Only enable if your world specifically supports this
+      </Step>
+      
+      <Step title="Gamma Correction">
+        **Gamma Correction** should be enabled (default) for VRSL.
+        
+        This matches VRSL's color space expectations.
+      </Step>
+    </Steps>
+  </Tab>
+  
+  <Tab title="Binary (High Density)">
+    **Best for**: Maximum channel density and complex shows
+    
+    <Steps>
+      <Step title="Select Binary">
+        In the Serializer dropdown, select **Binary**.
+      </Step>
+      
+      <Step title="Understand the Trade-offs">
+        Binary serialization:
+        - Packs 8 channels per pixel (8-bit binary)
+        - Requires higher bitrate streaming (5000+ Kbps recommended)
+        - Perfect for high channel count shows
+        - More sensitive to video compression artifacts
+      </Step>
+    </Steps>
+  </Tab>
+  
+  <Tab title="Binary Stage Flight">
+    **Best for**: Complex theatrical productions
+    
+    <Steps>
+      <Step title="Select Binary Stage Flight">
+        In the Serializer dropdown, select **BinaryStageFlight**.
+      </Step>
+      
+      <Step title="Features">
+        Binary Stage Flight includes:
+        - CRC error checking for data integrity
+        - Optimized for stage lighting workflows
+        - Higher reliability over compressed video
+      </Step>
+    </Steps>
+  </Tab>
+  
+  <Tab title="Other Formats">
+    Other serializers available:
+    
+    - **ColorBinary** - RGB color-optimized binary encoding
+    - **Ternary** - Three-state encoding
+    - **Spiral** - Custom spiral pattern layout
+    - **FuralitySomna** - Event-specific format
+    
+    Select from the dropdown and configure as needed.
+  </Tab>
+</Tabs>
+
+## Step 4: Test DMX Reception
+
+<Steps>
+  <Step title="Send Test Data">
+    From your lighting console:
+    1. Create a simple cue or scene
+    2. Set some channels to non-zero values (e.g., channel 1 = 255)
+    3. Trigger the cue
+  </Step>
+  
+  <Step title="Verify in HNode">
+    Look at the preview window (right side of HNode):
+    
+    <Tip>
+      You should see colored blocks or patterns corresponding to your DMX values.
+    </Tip>
+    
+    **VRSL**: Look for 16x16 pixel blocks
+    - Bright white = channel value 255
+    - Black/transparent = channel value 0
+    - Gray = intermediate values
+    
+    **Binary**: Look for pixel patterns
+    - Each pixel represents 8 channels as binary bits
+  </Step>
+  
+  <Step title="Troubleshooting: No Data">
+    If you don't see any changes:
+    
+    <AccordionGroup>
+      <Accordion title="Check Network Connection">
+        - Verify your computer and lighting console are on the same network
+        - Try pinging your computer from the console (or vice versa)
+        - Temporarily disable Windows Firewall to test
+      </Accordion>
+      
+      <Accordion title="Check Console Configuration">
+        - Verify ArtNet output is enabled
+        - Check the output IP address is correct
+        - Verify the universe number (try 0 and 1)
+        - Look for ArtNet output indicators on the console
+      </Accordion>
+      
+      <Accordion title="Check HNode Settings">
+        - Verify ArtNet Port is 6454
+        - Try setting ArtNet Address to 0.0.0.0
+        - Check that HNode is allowed through Windows Firewall
+      </Accordion>
+      
+      <Accordion title="Use Wireshark">
+        Advanced: Capture network traffic to verify ArtNet packets:
+        1. Install Wireshark
+        2. Capture on your network interface
+        3. Filter: `udp.port == 6454`
+        4. Look for ArtNet packets when triggering cues
+      </Accordion>
+    </AccordionGroup>
+  </Step>
+</Steps>
+
+## Step 5: Configure Spout Output
+
+<Steps>
+  <Step title="Set Spout Output Name">
+    In the Serializer tab, find **Spout Output Name**.
+    
+    Default: `HNode Output`
+    
+    <Note>
+      This is the name that will appear in OBS and other Spout-enabled applications.
+    </Note>
+  </Step>
+  
+  <Step title="Adjust Output Resolution">
+    Set **Output Resolution** based on your needs:
+    
+    - `1920x1080` (default) - Full HD, good balance
+    - `1280x720` - HD, better performance
+    - `3840x2160` - 4K, high channel count but performance intensive
+    
+    Format: `WIDTHxHEIGHT` (e.g., `1920x1080`)
+  </Step>
+  
+  <Step title="Set Target Framerate">
+    **Target Framerate**: `60` (default)
+    
+    - `30` - Lower performance, sufficient for most use cases
+    - `60` - Smooth, responsive (recommended)
+    - `120` - Only if you have powerful hardware and need it
+    
+    <Warning>
+      Higher framerates increase CPU/GPU load. Match your streaming framerate to avoid issues.
+    </Warning>
+  </Step>
+</Steps>
+
+## Step 6: Connect to OBS Studio
+
+<Note>
+  You must have the [Spout2 plugin for OBS](/installation#spout2-plugin-for-obs-studio) installed first.
+</Note>
+
+<Steps>
+  <Step title="Add Spout2 Source">
+    In OBS Studio:
+    1. Click **+** under Sources
+    2. Select **Spout2 Capture**
+    3. Name it "HNode" and click OK
+  </Step>
+  
+  <Step title="Configure Source">
+    In the Spout2 Capture properties:
+    
+    - **SpoutSenders**: Select `HNode Output` from the dropdown
+    - **Composite Mode**: Set to "Default" (allows transparency)
+    
+    Click OK.
+  </Step>
+  
+  <Step title="Verify Capture">
+    You should now see the HNode output in OBS.
+    
+    <Tip>
+      The output updates in real-time as you change DMX values on your console.
+    </Tip>
+  </Step>
+  
+  <Step title="Optional: Crop Unused Area">
+    If using VRSL or another format that doesn't fill the frame:
+    
+    1. Hold `Alt` + drag with left mouse button to crop
+    2. Or right-click source → Transform → Edit Transform
+    3. Set Crop values (Top/Bottom/Left/Right)
+  </Step>
+</Steps>
+
+## Step 7: Stream or Record
+
+Now that HNode is feeding into OBS, you can:
+
+<Tabs>
+  <Tab title="Stream to VRChat">
+    For low-latency local streaming to VRChat using MediaMTX:
+    
+    <Steps>
+      <Step title="Start MediaMTX">
+        Run `mediamtx.exe` (see [installation guide](/installation#mediamtx-for-local-streaming)).
+      </Step>
+      
+      <Step title="Configure OBS Stream Settings">
+        Settings → Stream:
+        - **Service**: Custom
+        - **Server**: `rtmp://localhost/`
+        - **Stream Key**: `hnode` (or any text)
+      </Step>
+      
+      <Step title="Configure OBS Output Settings">
+        Settings → Output → Streaming:
+        
+        **Video Encoder**:
+        - NVIDIA: `NVIDIA NVENC H.264`
+        - AMD: `AMD HW H.264`
+        - CPU: `x264` (if powerful CPU)
+        
+        **Rate Control**: Constant Bitrate
+        
+        **Bitrate**: `5000 Kbps` (higher for Binary formats)
+        
+        **Keyframe Interval**: `1s`
+        
+        **Preset**: `Slow (Good Quality)` or `Low Latency`
+      </Step>
+      
+      <Step title="Start Streaming">
+        Click **Start Streaming** in OBS.
+        
+        MediaMTX console should show the incoming connection.
+      </Step>
+      
+      <Step title="Use in VRChat">
+        In your VRChat world video player, use the URL:
+        ```
+        rtspt://localhost:8554/hnode
+        ```
+        
+        Or for external access:
+        ```
+        rtspt://YOUR_IP_ADDRESS:8554/hnode
+        ```
+      </Step>
+    </Steps>
+  </Tab>
+  
+  <Tab title="Stream to Cloud">
+    For streaming to Twitch, YouTube, or VRCDN:
+    
+    <Steps>
+      <Step title="Get Stream Key">
+        From your streaming platform:
+        - **Twitch**: Dashboard → Settings → Stream Key
+        - **YouTube**: YouTube Studio → Go Live → Stream Key
+        - **VRCDN**: VRCDN Dashboard
+      </Step>
+      
+      <Step title="Configure OBS">
+        Settings → Stream:
+        - **Service**: Select your platform
+        - **Server**: Usually auto-selected
+        - **Stream Key**: Paste your key
+      </Step>
+      
+      <Step title="Optimize Settings">
+        Settings → Output:
+        - **Video Bitrate**: Platform-dependent
+          - Twitch: 3000-6000 Kbps
+          - YouTube: 4500-9000 Kbps
+        - **Encoder**: Hardware encoder recommended
+        - **Preset**: Balance quality and latency
+      </Step>
+      
+      <Step title="Start Streaming">
+        Click **Start Streaming** in OBS.
+      </Step>
+    </Steps>
+    
+    <Note>
+      Cloud streaming typically has 5-20 seconds of latency. Use MediaMTX for local/low-latency scenarios.
+    </Note>
+  </Tab>
+  
+  <Tab title="Record Locally">
+    To record light shows for content creation:
+    
+    <Steps>
+      <Step title="Configure Recording Settings">
+        Settings → Output → Recording:
+        
+        - **Recording Format**: `mp4` or `mkv`
+        - **Encoder**: Same as streaming or higher quality
+        - **Recording Quality**: "High Quality, Medium File Size" or "Indistinguishable Quality"
+      </Step>
+      
+      <Step title="Choose Output Path">
+        Settings → Output → Recording:
+        - Set **Recording Path** to desired folder
+      </Step>
+      
+      <Step title="Start Recording">
+        Click **Start Recording** in OBS.
+        
+        Recording and streaming can run simultaneously.
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>
+
+## Step 8: Add Generators (Optional)
+
+Generators create or modify DMX data beyond ArtNet input. Try adding a text generator:
+
+<Steps>
+  <Step title="Switch to Generator Tab">
+    Click the **Generator** tab at the top of HNode.
+  </Step>
+  
+  <Step title="Add Text Generator">
+    1. Click **Add Generator** button
+    2. Select **Text** from the dropdown
+    3. A new text generator appears in the list
+  </Step>
+  
+  <Step title="Configure Text Generator">
+    In the generator settings:
+    
+    - **Text**: Enter any text (e.g., "Hello World")
+    - **Channel Start**: Set to `100` (or any unused channel range)
+    - **Unicode**: Off for ASCII, On for UTF-16
+    - **Limit Length**: Optional, restrict to max characters
+  </Step>
+  
+  <Step title="Verify Output">
+    Look at the preview window. You should see the text encoded into the DMX grid starting at your specified channel.
+    
+    <Tip>
+      Text generators are perfect for displaying song lyrics, event info, or dynamic messages in virtual worlds.
+    </Tip>
+  </Step>
+</Steps>
+
+## Step 9: Save Your Configuration
+
+<Steps>
+  <Step title="Click Save Button">
+    At the bottom of any tab, click the **Save** button.
+  </Step>
+  
+  <Step title="Choose Location">
+    Select a location and filename for your show configuration.
+    
+    Example: `MyShow.yaml`
+  </Step>
+  
+  <Step title="What's Saved">
+    The YAML file contains:
+    - Selected serializer and all its settings
+    - All generators with their configurations
+    - All exporters
+    - Network settings (ArtNet port/address)
+    - Resolution and framerate
+    - Spout names
+  </Step>
+  
+  <Step title="Load Configuration">
+    To restore your setup:
+    1. Click **Load** button
+    2. Select your saved `.yaml` file
+    3. All settings are restored instantly
+  </Step>
+</Steps>
+
+<Warning>
+  HNode does not auto-save. Always save your configuration before closing if you want to keep your settings.
+</Warning>
+
+## Example Configurations
+
+Here are some common configuration examples:
+
+<CodeGroup>
+```yaml Basic VRSL Setup
+Serializer: !VRSL
+  GammaCorrection: true
+  RGBGridMode: false
+  OutputConfig: HorizontalTop
+
+Deserializer: !VRSL
+  GammaCorrection: true
+  RGBGridMode: false
+  OutputConfig: HorizontalTop
+
+Generators: []
+Exporters: []
+
+Transcode: false
+TranscodeUniverseCount: 3
+SerializeUniverseCount: 2147483647
+
+ArtNetPort: 6454
+ArtNetAddress: 0.0.0.0
+SpoutOutputName: HNode Output
+SpoutInputName: HNode Input
+TargetFramerate: 60
+OutputResolution: 1920x1080
+InputResolution: 1920x1080
+```
+
+```yaml VRSL with Text Generator
+Serializer: !VRSL
+  GammaCorrection: true
+  RGBGridMode: false
+  OutputConfig: HorizontalTop
+
+Generators:
+  - !Text
+    text: "Now Playing: Artist - Song Title"
+    channelStart: 200
+    unicode: false
+    limitLength: true
+    maxCharacters: 64
+
+Exporters: []
+
+ArtNetPort: 6454
+ArtNetAddress: 0.0.0.0
+SpoutOutputName: HNode Output
+TargetFramerate: 60
+OutputResolution: 1920x1080
+```
+
+```yaml Binary with MIDIDMX Export
+Serializer: !SerializerBinary {}
+
+Generators: []
+
+Exporters:
+  - !MIDIDMX
+    midiDevice: "loopMIDI Port"
+    channelsPerUpdate: 100
+    idleScanChannels: 10
+
+ArtNetPort: 6454
+ArtNetAddress: 0.0.0.0
+SpoutOutputName: HNode Output
+TargetFramerate: 60
+OutputResolution: 1920x1080
+```
+
+```yaml Transcoding Configuration
+Serializer: !VRSL
+  GammaCorrection: true
+  RGBGridMode: false
+  OutputConfig: HorizontalTop
+
+Deserializer: !SerializerBinary {}
+
+Transcode: true
+TranscodeUniverseCount: 3
+
+SpoutInputName: "Other App Output"
+SpoutOutputName: "HNode VRSL Output"
+
+TargetFramerate: 60
+OutputResolution: 1920x1080
+InputResolution: 1920x1080
+```
+</CodeGroup>
+
+## Next Steps
+
+Congratulations! You now have a working ArtNet to video stream setup. Here's what to explore next:
+
+<CardGroup cols={2}>
+  <Card title="Explore Serializers" icon="grid">
+    Try different serializers like Binary Stage Flight for higher channel density
+  </Card>
+  
+  <Card title="Use Generators" icon="wand-magic-sparkles">
+    Add subtitle generators (SRT, ASS, LRC) for synchronized text displays
+  </Card>
+  
+  <Card title="Add Exporters" icon="file-export">
+    Set up MIDIDMX for VRChat worlds or timecode export for synchronization
+  </Card>
+  
+  <Card title="Optimize Performance" icon="gauge">
+    Fine-tune resolution, framerate, and encoder settings for your hardware
+  </Card>
+</CardGroup>
+
+## Troubleshooting Common Issues
+
+<AccordionGroup>
+  <Accordion title="High CPU/GPU Usage">
+    **Symptoms**: HNode or OBS uses excessive resources
+    
+    **Solutions**:
+    - Lower **Output Resolution** (try 1280x720)
+    - Reduce **Target Framerate** to 30
+    - Use hardware encoder in OBS (NVENC, AMD VCE)
+    - Close other GPU-intensive applications
+    - Lower OBS encoding preset ("Fast" or "Very Fast")
+  </Accordion>
+  
+  <Accordion title="Laggy/Delayed Video">
+    **Symptoms**: Video lags behind DMX changes
+    
+    **Solutions**:
+    - Use MediaMTX instead of cloud streaming for local use
+    - Reduce OBS bitrate slightly
+    - Enable "Low Latency" or "Ultra Low Latency" preset in OBS
+    - Ensure stable network connection
+    - Check that HNode maintains 60 FPS (see Graphy overlay)
+  </Accordion>
+  
+  <Accordion title="Artifacts in Binary Formats">
+    **Symptoms**: Binary/Ternary formats show incorrect values after streaming
+    
+    **Solutions**:
+    - Increase streaming bitrate (try 7000-10000 Kbps)
+    - Use better encoder preset ("Slow" or "Medium")
+    - Disable B-frames in encoder settings
+    - Increase keyframe interval to 2s
+    - Consider using VRSL instead if artifacts persist
+  </Accordion>
+  
+  <Accordion title="Spout Not Appearing in OBS">
+    **Symptoms**: HNode Output doesn't show in Spout2 Capture dropdown
+    
+    **Solutions**:
+    - Restart OBS Studio
+    - Restart HNode
+    - Verify Spout2 plugin is installed correctly
+    - Check that both HNode and OBS are 64-bit
+    - Try changing **Spout Output Name** to something unique
+    - Reboot your computer (Spout registry may need refresh)
+  </Accordion>
+  
+  <Accordion title="Configuration Won't Load">
+    **Symptoms**: Load button shows error or doesn't restore settings
+    
+    **Solutions**:
+    - Verify YAML file is not corrupted (open in text editor)
+    - Check YAML syntax is correct (indentation matters)
+    - Try loading on a fresh HNode start
+    - Manually edit problematic fields in the YAML file
+    - Create a new configuration and compare formats
+  </Accordion>
+</AccordionGroup>
+
+## Getting Help
+
+If you encounter issues not covered here:
+
+<CardGroup cols={2}>
+  <Card title="GitHub Issues" icon="github" href="https://github.com/Happyrobot33/HNode/issues">
+    Report bugs or request features on the HNode repository
+  </Card>
+  
+  <Card title="GitHub Discussions" icon="comments" href="https://github.com/Happyrobot33/HNode/discussions">
+    Ask questions and share configurations with the community
+  </Card>
+</CardGroup>
+
+<Tip>
+  When reporting issues, include:
+  - HNode version
+  - Your configuration YAML
+  - Description of the problem
+  - Steps to reproduce
+  - Screenshots if applicable
+</Tip>

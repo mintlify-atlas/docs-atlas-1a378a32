@@ -1,0 +1,144 @@
+---
+title: 'MIDIDMX'
+description: 'Export DMX data to VRChat worlds using the MIDIDMX protocol'
+---
+
+## Overview
+
+The MIDIDMX exporter enables HNode to send DMX channel data to VRChat worlds that have the MIDIDMX receiver installed. It supports up to 16,384 DMX channels across 8 banks (2,048 channels per bank).
+
+**Requirements:**
+- MIDIDMX receiver installed in VRChat world: https://github.com/micksam7/VRC-MIDIDMX
+- Virtual MIDI device (e.g., loopMIDI on Windows)
+
+**Original Code:** By Micca (me@micksam7.com)
+
+## Configuration
+
+<ParamField path="midiDevice" type="string" default="loopMIDI Port">
+  The name of the MIDI output device to use for sending data. Must match the exact name of the device as it appears in the system.
+</ParamField>
+
+<ParamField path="channelsPerUpdate" type="EquationNumber" default="100">
+  Maximum number of channels to send per frame. Limited to 100 due to VRChat buffer constraints. Higher values may cause data loss.
+</ParamField>
+
+<ParamField path="idleScanChannels" type="EquationNumber" default="10">
+  Number of channels to periodically rescan during idle operation. Keeps this low to preserve bandwidth for actively changing channels.
+</ParamField>
+
+<ParamField path="useEditorLog" type="bool" default="false">
+  If true, monitors the Unity Editor log instead of the VRChat output log. Used for testing in the Unity Editor.
+</ParamField>
+
+## YAML Example
+
+```yaml
+exporters:
+  - type: MIDIDMX
+    midiDevice: "loopMIDI Port"
+    channelsPerUpdate: 100
+    idleScanChannels: 10
+    useEditorLog: false
+```
+
+## Key Features
+
+### Bank Switching
+
+MIDIDMX automatically switches between 8 banks (0-7) to support 16,384 total channels. Each bank contains 2,048 channels.
+
+### Watchdog System
+
+The exporter implements a watchdog system that monitors the VRChat log file for "MIDIREADY" responses from the world. This ensures data is only sent when the world is ready to receive it.
+
+### Connection States
+
+The exporter has three connection states accessible via `MidiStatus()`:
+
+<ResponseField name="Disconnected" type="Status">
+  No MIDI connection established.
+</ResponseField>
+
+<ResponseField name="ConnectedWait" type="Status">
+  Connected to MIDI device, waiting for VRChat world to respond to watchdog.
+</ResponseField>
+
+<ResponseField name="ConnectedSendingData" type="Status">
+  Actively sending data to VRChat world.
+</ResponseField>
+
+## Public Methods
+
+### GetMidiDevices()
+
+Returns a list of available MIDI output devices on the system.
+
+**Returns:** `List<string>` - Device names including "(none)" as the first option
+
+### MidiConnectDevice(string device)
+
+Connects to the specified MIDI device. Disconnects from any previously connected device.
+
+**Parameters:**
+- `device` (string): Name of the MIDI device to connect to
+
+### MidiStatus()
+
+Returns the current status of the MIDI connection.
+
+**Returns:** `MIDIDMX.Status` - Current connection state
+
+## Protocol Details
+
+### Control Codes
+
+The exporter uses MIDI control codes on channel 15:
+
+- **Watchdog (127)**: Periodic heartbeat signal
+- **Knock Sequence (101, 120, 107)**: Initial handshake to activate world receiver
+- **Bank Change (0-7)**: Switches active bank
+- **Clear (100)**: Clears all channel data
+
+### Data Encoding
+
+Channel data is encoded using 18-bit MIDI messages:
+- Channels 0-1023: NoteOn events
+- Channels 1024-2047: NoteOff events
+
+Each DMX value (0-255) is split across MIDI note number and velocity fields.
+
+## Technical Implementation
+
+```csharp
+public class MIDIDMX : IExporter
+{
+    public string midiDevice = "loopMIDI Port";
+    public EquationNumber channelsPerUpdate = 100;
+    public EquationNumber idleScanChannels = 10;
+    public bool useEditorLog = false;
+    
+    // Supports up to 16,384 channels
+    const int maxChannels = 16384;
+}
+```
+
+## Usage Notes
+
+- Keep `channelsPerUpdate` at 100 or lower due to VRChat buffer limitations
+- The exporter automatically handles reconnection if the world becomes unresponsive
+- Only changed channels are sent to minimize bandwidth usage
+- Idle scanning ensures channels remain synchronized even without changes
+- The watchdog system prevents data loss by only sending when the world is ready
+
+## Troubleshooting
+
+**No data being sent:**
+- Check that the MIDI device name exactly matches your virtual MIDI port
+- Verify the VRChat world has MIDIDMX receiver installed
+- Monitor status using `MidiStatus()` - should show "ConnectedSendingData"
+
+**Data loss or corruption:**
+- Reduce `channelsPerUpdate` if seeing packet loss
+- Ensure `idleScanChannels` is low (10 or less)
+- Check VRChat output log for "MIDIREADY" messages

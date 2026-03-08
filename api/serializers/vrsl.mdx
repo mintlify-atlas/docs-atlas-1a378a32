@@ -1,0 +1,223 @@
+---
+title: 'VRSL Serializer'
+description: 'Industry-standard VRSL-compatible DMX serializer'
+---
+
+## Overview
+
+The VRSL serializer provides compatibility with VRSL (VR Stage Lighting) fixtures in VRChat. It supports multiple output configurations, gamma correction, and RGB grid mode for efficient multi-universe encoding.
+
+## Class: VRSL
+
+**Namespace:** Global  
+**Implements:** `IDMXSerializer`
+
+### Properties
+
+<ResponseField name="GammaCorrection" type="bool" default="true">
+  Enables gamma correction for color output. When enabled, colors are converted to linear space before encoding.
+  
+  <Note>
+    VRSL outputs in a converted color space instead of native linear. Disable this if your video pipeline already handles gamma correction.
+  </Note>
+</ResponseField>
+
+<ResponseField name="RGBGridMode" type="bool" default="false">
+  Enables RGB Grid Mode where every 3 universes are encoded into separate RGB color channels, allowing for more efficient use of texture space.
+  
+  When enabled:
+  - Universe 0 → Red channel
+  - Universe 1 → Green channel  
+  - Universe 2 → Blue channel
+  - Pattern repeats for universes 3-5, 6-8, etc.
+</ResponseField>
+
+<ResponseField name="outputConfig" type="OutputConfigs" default="HorizontalTop">
+  Determines the layout orientation of DMX data blocks in the output texture.
+  
+  Available configurations:
+  - `HorizontalTop`: Blocks arranged horizontally starting from top
+  - `HorizontalBottom`: Blocks arranged horizontally starting from bottom
+  - `VerticalLeft`: Blocks arranged vertically on the left side
+  - `VerticalRight`: Blocks arranged vertically on the right side
+</ResponseField>
+
+### Configuration Constants
+
+<ResponseField name="blockSize" type="const int" default="16">
+  Size in pixels of each DMX channel block (16×16 pixels)
+</ResponseField>
+
+<ResponseField name="blocksPerCol" type="const int" default="13">
+  Number of channel blocks per column in the layout
+</ResponseField>
+
+## Methods
+
+### SerializeChannel
+
+Encodes a DMX channel value into a 16×16 pixel block in the output texture.
+
+```csharp
+public void SerializeChannel(ref Color32[] pixels, byte channelValue, 
+    int channel, int textureWidth, int textureHeight)
+```
+
+<ParamField path="pixels" type="ref Color32[]" required>
+  The pixel array to write the encoded data to
+</ParamField>
+
+<ParamField path="channelValue" type="byte" required>
+  The DMX channel value (0-255) to encode
+</ParamField>
+
+<ParamField path="channel" type="int" required>
+  The DMX channel number (determines position in texture)
+</ParamField>
+
+<ParamField path="textureWidth" type="int" required>
+  Width of the output texture in pixels
+</ParamField>
+
+<ParamField path="textureHeight" type="int" required>
+  Height of the output texture in pixels
+</ParamField>
+
+**Behavior:**
+- Calculates block position based on channel number and output configuration
+- Applies gamma correction if enabled
+- In RGB Grid Mode, distributes universes across color channels
+- Writes a 16×16 block of pixels with the encoded value
+
+### DeserializeChannel
+
+Decodes a DMX channel value from an input video texture.
+
+```csharp
+public void DeserializeChannel(Texture2D tex, ref byte channelValue, 
+    int channel, int textureWidth, int textureHeight)
+```
+
+<ParamField path="tex" type="Texture2D" required>
+  The input texture to read from
+</ParamField>
+
+<ParamField path="channelValue" type="ref byte" required>
+  Output parameter that receives the decoded channel value
+</ParamField>
+
+<ParamField path="channel" type="int" required>
+  The DMX channel number to decode
+</ParamField>
+
+<ParamField path="textureWidth" type="int" required>
+  Width of the input texture
+</ParamField>
+
+<ParamField path="textureHeight" type="int" required>
+  Height of the input texture
+</ParamField>
+
+**Behavior:**
+- Reads the center pixel of the channel's block
+- Applies inverse gamma correction if enabled
+- In RGB Grid Mode, extracts value from appropriate color channel
+
+## Configuration Example
+
+```csharp
+// Create and configure VRSL serializer
+var vrsl = new VRSL();
+
+// Enable gamma correction (default)
+vrsl.GammaCorrection = true;
+
+// Use RGB Grid Mode for efficient multi-universe encoding
+vrsl.RGBGridMode = true;
+
+// Set vertical right layout
+vrsl.outputConfig = VRSL.OutputConfigs.VerticalRight;
+
+// Serialize a channel
+Color32[] pixels = new Color32[textureWidth * textureHeight];
+vrsl.SerializeChannel(ref pixels, 255, 0, textureWidth, textureHeight);
+```
+
+## Universe Layout
+
+VRSL uses a universe-based layout where:
+- Each universe contains 512 channels
+- Channels are arranged in blocks of 16×16 pixels
+- 13 blocks fit vertically in a standard column
+- Universe spacing includes a 16-pixel gap between universes
+
+### Horizontal Layout
+```
+[U0 Ch0-12] [U0 Ch13-25] ... [U1 Ch0-12] ...
+```
+
+### Vertical Layout  
+```
+[U0 Ch0]
+[U0 Ch1]
+...
+[U0 Ch12]
+[U0 Ch13]
+...
+```
+
+## RGB Grid Mode Details
+
+When RGB Grid Mode is enabled:
+
+1. **Channel Distribution**
+   - Channels 0-511 (Universe 0) → Red channel
+   - Channels 512-1023 (Universe 1) → Green channel
+   - Channels 1024-1535 (Universe 2) → Blue channel
+
+2. **Texture Efficiency**
+   - 3 universes encoded in the space of 1
+   - Triples the effective channel density
+   - Requires color-aware decoding
+
+3. **Repeating Pattern**
+   - Pattern repeats for subsequent universe sets
+   - Universe 3 wraps to Red channel at a new position
+
+<Warning>
+  RGB Grid Mode requires both sender and receiver to use the same configuration. Mixing RGB Grid and standard mode will result in incorrect channel values.
+</Warning>
+
+## Output Configuration Guide
+
+<AccordionGroup>
+  <Accordion title="HorizontalTop">
+    Data blocks flow horizontally from left to right, starting at the top of the texture. Best for wide aspect ratios.
+  </Accordion>
+  
+  <Accordion title="HorizontalBottom">
+    Data blocks flow horizontally from left to right, starting at the bottom of the texture. Useful when other content occupies the top portion.
+  </Accordion>
+  
+  <Accordion title="VerticalLeft">
+    Data blocks flow vertically from top to bottom, starting on the left side. Optimized for tall aspect ratios.
+  </Accordion>
+  
+  <Accordion title="VerticalRight">
+    Data blocks flow vertically from top to bottom, starting on the right side. Keeps data away from typical UI elements on the left.
+  </Accordion>
+</AccordionGroup>
+
+## Performance Considerations
+
+- **Block Size**: 16×16 pixels provides good visibility and error tolerance
+- **Gamma Correction**: Minimal performance impact, recommended for accuracy
+- **RGB Grid Mode**: No performance penalty, 3× texture efficiency gain
+- **Layout**: No performance difference between configurations
+
+## Compatibility
+
+This serializer is fully compatible with:
+- VRSL fixtures in VRChat
+- Standard DMX512 protocol (512 channels per universe)
+- Industry-standard DMX lighting consoles

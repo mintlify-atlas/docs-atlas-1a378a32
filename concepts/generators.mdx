@@ -1,0 +1,482 @@
+---
+title: Generators
+description: Understanding DMX generators that create, modify, and transform lighting data in real-time
+---
+
+## What are Generators?
+
+Generators are plugins that create or modify DMX channel data during the rendering pipeline. They run **after** Art-Net data is received but **before** serialization to video, allowing real-time manipulation of lighting data.
+
+<CardGroup cols={2}>
+  <Card title="Create Data" icon="wand-magic-sparkles">
+    Generate DMX from scratch (strobes, effects)
+  </Card>
+  <Card title="Modify Data" icon="pen-to-square">
+    Transform existing channels (remapping, fades)
+  </Card>
+  <Card title="Text Encoding" icon="font">
+    Encode text strings as DMX bytes
+  </Card>
+  <Card title="Time Sync" icon="clock">
+    Timecode and time-based data injection
+  </Card>
+</CardGroup>
+
+## The IDMXGenerator Interface
+
+All generators implement the simple but powerful `IDMXGenerator` interface:
+
+```csharp IDMXGenerator.cs:6-9
+public interface IDMXGenerator : IUserInterface<IDMXGenerator>, IConstructable
+{
+    void GenerateDMX(ref List<byte> dmxData);
+}
+```
+
+That's it! The `GenerateDMX` method is called once per frame with the complete channel array passed by reference, allowing both read and write operations.
+
+### Generator Execution Order
+
+Generators execute in the order they appear in the show configuration:
+
+```csharp TextureWriter.cs:99-105
+foreach (var generator in Loader.showconf.Generators)
+{
+    generator.GenerateDMX(ref mergedDmxValues);
+}
+```
+
+<Warning>
+Generator order matters! A generator that sets channel 100 to 255 will be overridden by a later generator that sets it to 0.
+</Warning>
+
+<Tip>
+Use the UI to reorder generators by dragging them up/down in the list. Strategic ordering enables complex layered effects.
+</Tip>
+
+## Available Generators
+
+HNode includes a comprehensive set of built-in generators:
+
+### StaticValue
+
+**Purpose**: Set a range of channels to a constant value
+
+```csharp GeneratorStaticValue.cs:18-27
+public virtual void GenerateDMX(ref List<byte> dmxData)
+{
+    dmxData.EnsureCapacity(channelStart + (channelEnd - channelStart) + 1);
+    
+    for (int i = channelStart; i < channelEnd + 1; i++)
+    {
+        dmxData[i] = (byte)value;
+    }
+}
+```
+
+**Configuration**:
+- `channelStart`: First channel to set
+- `channelEnd`: Last channel to set (inclusive)
+- `value`: Byte value (0-255)
+
+**Use Cases**:
+- Force dimmer channels to full
+- Keep certain fixtures in a specific state
+- Override Art-Net data for testing
+- Set default values for unused channels
+
+<Tip>
+Use equation syntax for channel addressing: `3.5` for Universe 3, Channel 5, or `(2*3).10` for Universe 6, Channel 10.
+</Tip>
+
+### Strobe
+
+**Purpose**: Generate a periodic on/off strobe effect
+
+```csharp GeneratorStrobe.cs:16-34
+public void GenerateDMX(ref List<byte> dmxData)
+{
+    dmxData.EnsureCapacity(channel + 1);
+    
+    var time = DateTime.Now.Millisecond;
+    float period = 1000.0f / frequency; // in ms
+    
+    if (time % period < period / 2)
+    {
+        dmxData[channel] = valueOn;
+    }
+    else
+    {
+        dmxData[channel] = valueOff;
+    }
+}
+```
+
+**Configuration**:
+- `channel`: Target DMX channel
+- `valueOn`: Value when strobe is on (default: 255)
+- `valueOff`: Value when strobe is off (default: 0)
+- `frequency`: Strobe rate in Hz (cycles per second)
+
+**Use Cases**:
+- Create strobe lighting effects
+- Pulse indicators or warning lights
+- Rhythmic visual effects
+- Testing channel response
+
+<Note>
+Strobe frequency is based on system time, ensuring consistent timing across frames even with variable framerates.
+</Note>
+
+### Text
+
+**Purpose**: Encode text strings as DMX channel data
+
+```csharp GeneratorText.cs:86-126
+public virtual void GenerateDMX(ref List<byte> dmxData)
+{
+    // Convert to UTF-8 or UTF-16
+    byte[] textBytes = unicode 
+        ? System.Text.Encoding.Unicode.GetBytes(text)
+        : System.Text.Encoding.UTF8.GetBytes(text);
+    
+    dmxData.WriteToListAtPosition(textBytes.ToList(), channelStart);
+}
+```
+
+**Configuration**:
+- `text`: String to encode
+- `channelStart`: First channel to write to
+- `unicode`: Use UTF-16 (true) or UTF-8 (false)
+- `limitLength`: Enforce maximum character count
+- `maxCharacters`: Maximum string length if limited
+
+**Features**:
+- **Character Fallback**: Automatically converts unsupported Unicode characters to ASCII equivalents
+- **Encoding Options**: UTF-8 (compact) or UTF-16 (full Unicode support)
+- **Length Control**: Optional truncation for fixed-size displays
+
+**Use Cases**:
+- Display song titles on DMX LED displays
+- Show artist names or venue info
+- Encode subtitles or lyrics
+- Transmit metadata through DMX
+
+<Tip>
+UTF-8 uses 1 byte per ASCII character, while UTF-16 uses 2 bytes. Use UTF-8 when possible to conserve channels.
+</Tip>
+
+### Remap
+
+**Purpose**: Copy a range of channels to a different location
+
+```csharp GeneratorRemap.cs:14-24
+public void GenerateDMX(ref List<byte> dmxData)
+{
+    dmxData.EnsureCapacity(TargetChannel + (int)SourceChannelLength);
+    
+    for (int i = 0; i < SourceChannelLength; i++)
+    {
+        dmxData[TargetChannel + i] = dmxData[SourceChannelStart + i];
+    }
+}
+```
+
+**Configuration**:
+- `SourceChannelStart`: First channel to copy from
+- `SourceChannelLength`: Number of channels to copy
+- `TargetChannel`: Destination channel
+
+**Use Cases**:
+- Mirror fixture control across universes
+- Reuse existing DMX data in different locations
+- Create backup/redundant control
+- Route channels to different outputs
+
+<Note>
+Remap performs a simple copy operation. If source and target ranges overlap, the behavior depends on generator order.
+</Note>
+
+### RemapOnDemand
+
+**Purpose**: Remap channels with manual triggering
+
+Similar to Remap but includes UI controls to enable/disable the remapping dynamically without editing the configuration.
+
+### Fade
+
+**Purpose**: Create smooth transitions between channel values
+
+Fades channels from their current value to a target value over a specified duration, useful for smooth lighting state changes.
+
+### Time
+
+**Purpose**: Encode current time as DMX values
+
+Writes the current system time (hours, minutes, seconds, milliseconds) to channels, useful for time-synchronized shows or displays.
+
+### DMXPacket
+
+**Purpose**: Inject raw DMX packet data
+
+Allows manual specification of exact DMX values for each channel, useful for testing or creating static lighting states.
+
+### SRT (SubRip Subtitles)
+
+**Purpose**: Display subtitle text from .srt files
+
+Loads subtitle files and displays the appropriate text for the current time, automatically encoding it as DMX.
+
+**Use Cases**:
+- Synchronized lyrics display
+- Timed text messages
+- Event schedules
+- Scripted announcements
+
+### LRC (Lyrics)
+
+**Purpose**: Display synchronized lyrics from .lrc files
+
+Similar to SRT but uses the LRC format common in music players for karaoke-style lyrics.
+
+### ASS (Advanced SubStation)
+
+**Purpose**: Display advanced subtitles from .ass files
+
+Supports the ASS/SSA subtitle format with advanced styling (though styling is limited when converting to plain DMX text).
+
+### TwitchChat
+
+**Purpose**: Stream Twitch chat messages to DMX
+
+Connects to Twitch IRC and converts live chat messages into DMX text data, enabling real-time chat display on DMX LED signs.
+
+**Use Cases**:
+- Live stream chat displays
+- Audience interaction
+- Chat moderation displays
+- Viewer engagement
+
+<Warning>
+TwitchChat requires OAuth authentication. Ensure you have proper credentials configured before enabling.
+</Warning>
+
+### OnTime
+
+**Purpose**: Integration with OnTime event management
+
+Connects to the OnTime show control software to receive timecode, event names, and scheduling data for synchronized performances.
+
+### MAVLinkDrone (Drone Network)
+
+**Purpose**: Control drone light shows via MAVLink protocol
+
+<CardGroup cols={2}>
+  <Card title="MAVLink Protocol" icon="drone">
+    Communicates with drones using MAVLink
+  </Card>
+  <Card title="Light Events" icon="lightbulb">
+    Sends color/brightness commands
+  </Card>
+  <Card title="Trajectories" icon="route">
+    Controls flight paths
+  </Card>
+  <Card title="Show Files" icon="file">
+    Loads choreographed shows
+  </Card>
+</CardGroup>
+
+**Features**:
+- Drone position layouts (grid, circular)
+- Synchronized light color changes
+- Pyrotechnic event triggering
+- Show file management via FTP
+
+**Use Cases**:
+- Outdoor drone light shows
+- Synchronized aerial performances
+- Large-scale event productions
+- Fireworks coordination
+
+<Note>
+The MAVLink generator is advanced and requires compatible drone hardware with MAVLink support. See the specialized documentation for setup details.
+</Note>
+
+## Generator Patterns
+
+### Reading Existing Data
+
+Generators can read existing channel values:
+
+```csharp
+public void GenerateDMX(ref List<byte> dmxData)
+{
+    // Read channel 0
+    byte currentValue = dmxData[0];
+    
+    // Modify based on current value
+    if (currentValue > 128)
+    {
+        dmxData[10] = 255; // Trigger something
+    }
+}
+```
+
+### Array Safety
+
+Always ensure capacity before writing:
+
+```csharp
+public void GenerateDMX(ref List<byte> dmxData)
+{
+    int targetChannel = 1000;
+    dmxData.EnsureCapacity(targetChannel + 1);
+    dmxData[targetChannel] = value;
+}
+```
+
+<Warning>
+Accessing a channel index beyond the list size will throw an exception. Always use `EnsureCapacity()` before writing to high channel numbers.
+</Warning>
+
+### Multi-Channel Operations
+
+Generators can operate on ranges efficiently:
+
+```csharp
+public void GenerateDMX(ref List<byte> dmxData)
+{
+    // Set channels 0-99 to full
+    for (int i = 0; i < 100; i++)
+    {
+        dmxData[i] = 255;
+    }
+}
+```
+
+## Creating Custom Generators
+
+Creating a generator is straightforward:
+
+<Steps>
+  <Step title="Implement IDMXGenerator">
+    Create a class implementing `IDMXGenerator`:
+    
+    ```csharp
+    public class MyGenerator : IDMXGenerator
+    {
+        public void Construct() { }
+        public void Deconstruct() { }
+        public void GenerateDMX(ref List<byte> dmxData) { }
+        // ... UI methods ...
+    }
+    ```
+  </Step>
+  
+  <Step title="Define Configuration Properties">
+    Add public properties for user configuration:
+    
+    ```csharp
+    public DMXChannel targetChannel = 0;
+    public EquationNumber value = 128;
+    ```
+  </Step>
+  
+  <Step title="Implement GenerateDMX">
+    Write your logic to create/modify DMX data:
+    
+    ```csharp
+    public void GenerateDMX(ref List<byte> dmxData)
+    {
+        dmxData.EnsureCapacity(targetChannel + 1);
+        dmxData[targetChannel] = (byte)value;
+    }
+    ```
+  </Step>
+  
+  <Step title="Create UI">
+    Implement `ConstructUserInterface` to create configuration controls:
+    
+    ```csharp
+    public void ConstructUserInterface(RectTransform rect)
+    {
+        Util.AddInputField(rect, "Target Channel")
+            .WithText(targetChannel)
+            .WithCallback((v) => { targetChannel = v; });
+    }
+    ```
+  </Step>
+  
+  <Step title="Test">
+    HNode automatically discovers new generators on launch. Add it to your show config and test!
+  </Step>
+</Steps>
+
+<Tip>
+Study the StaticValue and Strobe generators - they're simple and demonstrate the essential patterns for generator development.
+</Tip>
+
+## Generator UI Utilities
+
+HNode provides helper methods in `Util` class for creating UI:
+
+```csharp
+// Input field
+var input = Util.AddInputField(rect, "Label")
+    .WithText("Initial value")
+    .WithCallback((value) => { /* handle change */ })
+    .WithContentType(TMP_InputField.ContentType.IntegerNumber);
+
+// Toggle
+var toggle = Util.AddToggle(rect, "Enable Feature")
+    .WithValue(true)
+    .WithCallback((isOn) => { /* handle change */ });
+
+// Button
+var button = Util.AddButton(rect, "Click Me")
+    .WithCallback(() => { /* handle click */ });
+
+// Text label
+var label = Util.AddText(rect, "Information text");
+```
+
+## Performance Considerations
+
+Generators run every frame, so performance matters:
+
+- **Minimize Allocations**: Reuse objects, avoid creating new lists/arrays
+- **Cache Calculations**: Store computed values in class fields
+- **Bounds Check Once**: Use local variables to avoid repeated checks
+- **Profile**: Use Unity Profiler to identify bottlenecks
+
+```csharp
+// Good: Single capacity check
+dmxData.EnsureCapacity(channelEnd + 1);
+for (int i = channelStart; i <= channelEnd; i++)
+{
+    dmxData[i] = value;
+}
+
+// Bad: Repeated capacity checks
+for (int i = channelStart; i <= channelEnd; i++)
+{
+    dmxData.EnsureCapacity(i + 1); // Don't do this!
+    dmxData[i] = value;
+}
+```
+
+## Generator Combinations
+
+Generators become powerful when combined:
+
+**Example: Dynamic Text with Strobe Effect**
+
+1. **Text Generator**: Encodes "ALERT" to channels 0-4
+2. **Strobe Generator**: Flashes channels 0-4 at 2 Hz
+3. **Remap Generator**: Copies strobing text to channels 100-104
+
+Result: Flashing alert text in two locations!
+
+<Note>
+Generator order determines the final output. Experiment with different orderings to achieve desired effects.
+</Note>

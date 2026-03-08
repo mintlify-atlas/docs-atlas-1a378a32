@@ -1,0 +1,100 @@
+---
+title: 'Fade'
+description: 'Fade DMX channels in or out over time'
+---
+
+## Overview
+
+The `Fade` generator creates time-based fade in and fade out effects for specified DMX channels. It interpolates between the current channel value and a target value over a configurable duration.
+
+## Properties
+
+<ParamField path="channels" type="List\<DMXChannel\>" required>
+  List of channels to fade. Supports all channel notation formats.
+</ParamField>
+
+<ParamField path="valueToFadeTo" type="EquationNumber" default="0">
+  Target DMX value (0-255) to fade towards.
+</ParamField>
+
+<ParamField path="fadeDuration" type="TimeSpan" default="00:00:05">
+  Duration of the fade effect in seconds.
+</ParamField>
+
+## Implementation
+
+From ~/workspace/source/Assets/Plugin/Generators/GeneratorFade.cs:23-36:
+
+```csharp
+public virtual void GenerateDMX(ref List<byte> dmxData)
+{
+    //get a 0 to 1 value based on the current time and the fade start and end times
+    var now = DateTime.Now.TimeOfDay;
+    float t = Mathf.InverseLerp((float)fadeStart.TotalMilliseconds, (float)fadeEnd.TotalMilliseconds, (float)now.TotalMilliseconds);
+    //figure out the divisor
+    //lerp between the current value
+    //Debug.Log(t);
+    //multiply each channel by t
+    foreach (var channel in channels)
+    {
+        dmxData[channel] = (byte)Mathf.Lerp(dmxData[channel], valueToFadeTo, t);
+    }
+}
+```
+
+## UI Controls
+
+The Fade generator provides button controls in the HNode interface:
+
+- **Fade In** - Fades from target value to current value
+- **Fade Out** - Fades from current value to target value
+- **Fade Duration** - Adjustable fade time in seconds
+
+## Configuration Example
+
+```yaml
+generators:
+  # Fade out channels 1-16 to blackout over 10 seconds
+  - !Fade
+    channels:
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+      - 6
+      - 7
+      - 8
+    valueToFadeTo: 0
+    fadeDuration: 00:00:10
+```
+
+<Note>
+Fade effects are triggered via the UI buttons. The YAML only configures which channels to fade and the duration.
+</Note>
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Smooth Blackout">
+    Create a professional fade to black for all fixtures:
+    
+    ```yaml
+    - !Fade
+      channels: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+      valueToFadeTo: 0
+      fadeDuration: 00:00:05
+    ```
+  </Accordion>
+  
+  <Accordion title="Bump to Full">
+    Quick fade to full brightness:
+    
+    ```yaml
+    - !Fade
+      channels: [1.1, 1.2, 1.3, 1.4]
+      valueToFadeTo: 255
+      fadeDuration: 00:00:01
+    ```
+  </Accordion>
+</AccordionGroup>

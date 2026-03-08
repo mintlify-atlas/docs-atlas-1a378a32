@@ -1,0 +1,192 @@
+---
+title: "Streaming Configuration"
+description: "Configure OBS and streaming services to send HNode output to VRChat worlds and other platforms"
+---
+
+Once you have [OBS Studio set up](/guides/obs-setup) with HNode, you can stream the output to various platforms for use in VRChat worlds or other applications.
+
+## Streaming Options
+
+There are several ways to stream HNode output:
+
+- **YouTube Live**: High latency, possibly bad compression, okay bitrate
+- **Twitch**: High latency, possibly bad compression, okay bitrate
+- **VRCDN**: Low latency, okay compression, okay bitrate
+- **Other streaming services**: Check their Terms of Service before use
+- **Local streaming (MediaMTX)**: Low latency, okay compression, good bitrate (hardware-dependent)
+
+<Note>
+For local testing and optimal performance, we recommend MediaMTX. This guide focuses on MediaMTX setup, but the OBS configuration applies to most streaming services.
+</Note>
+
+## MediaMTX Setup
+
+MediaMTX is a free, open-source RTMP/RTSP server that provides low-latency local streaming.
+
+<Steps>
+  <Step title="Install MediaMTX">
+    1. Download the latest binary for your system from [MediaMTX releases](https://github.com/bluenviron/mediamtx/releases)
+    2. Extract the archive to an empty folder
+    3. Run the main executable:
+       - Windows: `mediamtx.exe`
+       - Linux/Mac: `./mediamtx`
+    
+    MediaMTX will start an RTMP server on `rtmp://localhost/` by default.
+  </Step>
+
+  <Step title="Configure OBS Stream Settings">
+    Open OBS Studio and navigate to **Settings** > **Stream**:
+    
+    - **Service**: `Custom`
+    - **Server**: `rtmp://localhost/`
+    - **Stream Key**: (optional) Add any ASCII text for a custom path (e.g., `mystream`)
+    
+    <Tip>
+    If you add a stream key like `mystream`, your final URL will be `rtmp://localhost/mystream`. If you encounter errors, your stream key may contain invalid characters.
+    </Tip>
+  </Step>
+
+  <Step title="Configure Output Settings">
+    Navigate to **Settings** > **Output** > **Streaming**:
+    
+    **Streaming Settings:**
+    - **Audio Encoder**: `FFmpeg AAC`
+    - **Video Encoder**: 
+      - NVIDIA GPUs: `NVIDIA NVENC H.264`
+      - AMD GPUs: `AMD HW H.264`
+      - CPU encoding: `x264` (requires powerful CPU)
+    - **Rescale Output**: `Disabled`
+    
+    **Encoder Settings:**
+    - **Rate Control**: `Constant Bitrate`
+    - **Bitrate**: `5000 Kbps` or higher for detailed visuals
+      - Use higher bitrates for Binary or Ternary gridnodes
+      - Don't set too low (causes quality issues) or too high (increases latency)
+    - **Keyframe interval**: `1s`
+    - **Preset**: `Slow (Good Quality)`
+      - Higher quality presets available if hardware permits, but not generally recommended
+    - **Tuning**: `High Quality`
+      - `Ultra low latency` may cause issues despite the name
+    - **Multipass Mode**: `Two Passes (Quarter Resolution)`
+    - **Profile**: `high`
+    - **Look-ahead**: `Off`
+    - **Adaptive Quantization** (or Psycho-Visual Tuning): `Off`
+    - **B-Frames**: `2`
+  </Step>
+
+  <Step title="Configure Audio Settings">
+    Navigate to **Settings** > **Output** > **Audio**:
+    
+    - Set **Audio Bitrate** to `320` on each track
+    
+    <Note>
+    If you experience audio issues, try lower values. `192 kbps` works well with MediaMTX.
+    </Note>
+    
+    Then navigate to **Settings** > **Audio**:
+    - **Sample Rate**: `48 kHz`
+    - **Channels**: `Stereo`
+  </Step>
+
+  <Step title="Configure Video Settings">
+    Navigate to **Settings** > **Video**:
+    
+    - **Base (Canvas) Resolution**: `1920x1080`
+    - **Output (Scaled) Resolution**: `1920x1080`
+    - **Common FPS Values**: `30`
+    
+    <Tip>
+    While you can set higher FPS values, if clients render at lower framerates, you'll experience stream delays. 30 FPS is the most common standard in VRChat clubs.
+    </Tip>
+  </Step>
+
+  <Step title="Configure Advanced Settings">
+    Navigate to **Settings** > **Advanced**:
+    
+    - **Color Range**: `Full`
+    
+    This ensures proper color representation in the output stream.
+  </Step>
+
+  <Step title="Start Streaming">
+    1. Click **Apply** to save your settings
+    2. Click **Start Streaming** in the OBS main window
+    3. Verify MediaMTX is receiving the stream (check the MediaMTX console output)
+  </Step>
+
+  <Step title="Test in VRChat">
+    In your VRChat world's video player, use the URL:
+    ```
+    rtspt://localhost:8554/(stream_key)
+    ```
+    
+    Replace `(stream_key)` with whatever you set in the OBS Server field after the trailing slash. If you used `rtmp://localhost/mystream`, use:
+    ```
+    rtspt://localhost:8554/mystream
+    ```
+    
+    <Note>
+    Note the protocol change from `rtmp://` (OBS output) to `rtspt://` (VRChat input). The port also changes from none (default 1935) to `:8554`.
+    </Note>
+  </Step>
+</Steps>
+
+## Platform-Specific Settings
+
+<AccordionGroup>
+  <Accordion title="YouTube Live">
+    - **Service**: YouTube - RTMPS
+    - **Server**: Primary YouTube ingest server
+    - **Stream Key**: Get from YouTube Studio live dashboard
+    - Keep bitrate at or below 8000 Kbps for 1080p30
+  </Accordion>
+
+  <Accordion title="Twitch">
+    - **Service**: Twitch
+    - **Server**: Auto (recommended) or select closest ingest server
+    - **Stream Key**: Get from Twitch dashboard
+    - Maximum bitrate: 6000 Kbps (recommended)
+  </Accordion>
+
+  <Accordion title="VRCDN">
+    Contact VRCDN for specific server URLs and configuration requirements. VRCDN is designed for VRChat streaming with lower latency than public platforms.
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="High stream delay">
+    - Lower bitrate in OBS encoder settings
+    - Reduce keyframe interval
+    - Enable "Ultra low latency" tuning (may affect quality)
+    - Ensure no other applications are using network bandwidth
+  </Accordion>
+
+  <Accordion title="Poor stream quality">
+    - Increase bitrate (if network permits)
+    - Change encoder preset to higher quality
+    - Verify canvas resolution matches HNode output resolution
+    - Check that Rescale Output is disabled
+  </Accordion>
+
+  <Accordion title="Stream won't start">
+    - Verify MediaMTX is running
+    - Check firewall settings
+    - Ensure the RTMP server address is correct
+    - Try removing the stream key (just use `rtmp://localhost/`)
+  </Accordion>
+
+  <Accordion title="VRChat can't connect to stream">
+    - Verify you're using `rtspt://` protocol (not `rtmp://`)
+    - Check the port is `:8554` (MediaMTX's default RTSP port)
+    - Ensure MediaMTX is receiving the stream before testing in VRChat
+    - Test the URL in VLC or another media player first
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+- Learn about [Show Configuration](/guides/show-configuration) to optimize HNode's output
+- Set up [MIDIDMX](/guides/mididmx) for direct DMX to VRChat communication
+- Explore [Spout I/O](/guides/spout-io) for advanced texture routing

@@ -1,0 +1,542 @@
+---
+title: 'FAQ'
+description: 'Frequently asked questions about HNode'
+icon: 'question'
+---
+
+## General Questions
+
+<AccordionGroup>
+  <Accordion title="What is HNode?">
+    HNode is an open-source ArtNet DMX to video grid node renderer built in Unity 6. It converts ArtNet DMX lighting data into video output that can be streamed into virtual worlds, particularly VRChat and similar platforms.
+
+    HNode acts as a bridge between professional lighting control software and virtual environments, enabling real-time synchronized lighting shows.
+  </Accordion>
+
+  <Accordion title="What platforms does HNode support?">
+    HNode is built in Unity 6 and currently supports:
+    - **Windows**: Primary platform with full Spout2 support
+    - **Linux**: Possible but Spout2 functionality is Windows-only
+    - **macOS**: May work but untested, no Spout2 support
+
+    For full functionality including Spout2 output, Windows is the recommended platform.
+  </Accordion>
+
+  <Accordion title="Is HNode free to use?">
+    Yes! HNode is completely open source and free to use. The source code is available on [GitHub](https://github.com/Happyrobot33/HNode) and released under an open-source license.
+
+    You can download pre-built releases or build from source yourself.
+  </Accordion>
+
+  <Accordion title="What lighting software works with HNode?">
+    HNode works with any lighting control software that can output ArtNet DMX data, including:
+    - **QLC+** (free, open-source)
+    - **MA Lighting grandMA2/grandMA3**
+    - **Chamsys MagicQ**
+    - **Avolites Titan**
+    - **LightKey**
+    - **DMXControl**
+    - And many others
+
+    As long as your software can send ArtNet over your network, it will work with HNode.
+  </Accordion>
+</AccordionGroup>
+
+## Serializers and Compatibility
+
+<AccordionGroup>
+  <Accordion title="What serializers does HNode support?">
+    HNode includes multiple serializers for different gridnode implementations:
+
+    **Standard Serializers:**
+    - **VRSL** - For VRSL (VRChat Stage Lighting) worlds
+    - **Binary Stage Flight** - For BSF gridnode implementations
+    - **Binary** - Standard binary encoding
+    - **Ternary** - Three-state encoding for higher density
+    - **Color Binary** - Color-based binary encoding
+    - **Spiral** - Spiral pattern encoding
+    - **Furality Somna** - Custom serializer for Furality events
+
+    Each serializer is optimized for specific gridnode implementations. Choose the one that matches your virtual world's lighting system.
+  </Accordion>
+
+  <Accordion title="What's the difference between a serializer and a deserializer?">
+    **Serializer:**
+    - Converts DMX channel data **to** video output
+    - Takes raw byte values and encodes them into pixels
+    - Used for outputting lighting data to be streamed
+
+    **Deserializer:**
+    - Converts video input **to** DMX channel data
+    - Reads pixel data and decodes it back to byte values
+    - Used for transcoding between different pixel mapping formats
+
+    HNode can use both simultaneously for transcoding - reading one video format and outputting a different format.
+  </Accordion>
+
+  <Accordion title="Can I use multiple serializers at once?">
+    Not directly. HNode uses one serializer for output at a time. However, you can:
+
+    1. **Use transcoding** - Input one format via deserializer, output another via serializer
+    2. **Run multiple instances** - Run multiple copies of HNode with different configurations
+    3. **Switch configurations** - Save multiple show configurations and switch between them
+
+    For transcoding, enable the **Transcode** option in your configuration and set both a deserializer and serializer.
+  </Accordion>
+
+  <Accordion title="How do I know which serializer to use?">
+    The serializer you need depends on your virtual world:
+
+    **For VRChat worlds:**
+    - Check the world description or documentation
+    - Look for terms like "VRSL", "Binary Stage Flight", "BSF"
+    - Ask the world creator which gridnode system they use
+
+    **For custom worlds:**
+    - VRSL is the most common in VRChat
+    - Binary Stage Flight is increasingly popular
+    - Custom implementations may need specific serializers
+
+    <Tip>
+      When in doubt, ask the world creator or check the world's documentation. Using the wrong serializer will result in no output or corrupted lighting data.
+    </Tip>
+  </Accordion>
+
+  <Accordion title="Can I create custom serializers?">
+    Yes! HNode is open source and designed to be extensible. To create a custom serializer:
+
+    1. Implement the `IDMXSerializer` interface in C#
+    2. Implement the required methods:
+       - `SerializeChannel()` - Convert DMX byte to pixels
+       - `DeserializeChannel()` - Convert pixels to DMX byte
+       - `InitFrame()` - Initialize frame state
+       - `CompleteFrame()` - Finalize frame (e.g., add CRC)
+    3. Add your serializer to the `Assets/Plugin/Serializers` directory
+    4. Rebuild HNode or use as a custom plugin
+
+    See existing serializers like `SerializerVRSL.cs` or `SerializerBinaryStageFlight.cs` for examples.
+  </Accordion>
+</AccordionGroup>
+
+## Configuration and Settings
+
+<AccordionGroup>
+  <Accordion title="How do I configure ArtNet settings?">
+    ArtNet configuration is set in your show configuration:
+
+    **ArtNet Address:**
+    - Default: `0.0.0.0` (listen on all network interfaces)
+    - Set to specific IP to bind to one interface
+    - Use `0.0.0.0` if you're unsure
+
+    **ArtNet Port:**
+    - Default: `6454` (standard ArtNet port)
+    - Only change if your system requires a different port
+    - Must match your lighting console's output port
+
+    Configure these in the HNode settings panel or in your show configuration YAML file.
+  </Accordion>
+
+  <Accordion title="What is transcoding and when should I use it?">
+    **Transcoding** converts between different pixel mapping formats:
+
+    **When to use transcoding:**
+    - Converting between different serializer formats
+    - Testing serializer outputs
+    - Adapting existing video streams to different gridnode types
+    - Bridging incompatible systems
+
+    **How to enable:**
+    1. Set `Transcode: true` in configuration
+    2. Set a **Deserializer** (input format)
+    3. Set a **Serializer** (output format)
+    4. Configure **Transcode Universe Count** (how many universes to convert)
+    5. Set **Spout Input Name** to receive video input
+
+    Note that transcoding adds processing overhead, so only transcode the universes you actually need.
+  </Accordion>
+
+  <Accordion title="What is channel masking?">
+    Channel masking allows you to selectively hide or show specific DMX channels:
+
+    **Use Cases:**
+    - Hide specific fixtures you don't want in output
+    - Isolate specific channel ranges for testing
+    - Create transparency effects
+    - Reduce visual clutter
+
+    **Configuration:**
+    - `maskedChannels`: List of channel ranges to mask (start/end pairs)
+    - `invertMask`: When true, only masked channels are visible
+    - `autoMaskOnZero`: Automatically mask channels with zero value
+
+    Example:
+    ```yaml
+    maskedChannels:
+      - start: 0
+        end: 100
+      - start: 512
+        end: 600
+    invertMask: false
+    autoMaskOnZero: true
+    ```
+
+    This masks channels 0-100 and 512-600, plus any channels set to zero.
+  </Accordion>
+
+  <Accordion title="What resolution should I use?">
+    Resolution depends on your needs:
+
+    **Output Resolution:**
+    - **1920×1080** (default): Best quality, higher processing load
+    - **1280×720**: Good quality, better performance
+    - **Higher resolutions**: Only if you need more channel density
+
+    **Input Resolution** (for transcoding):
+    - Should match your Spout input source
+    - Mismatch causes scaling artifacts
+
+    **Considerations:**
+    - Higher resolution = more processing power required
+    - Your serializer determines minimum resolution needs
+    - Streaming bitrate should match resolution (higher res = higher bitrate needed)
+
+    <Note>
+      Most lighting applications work fine with 1280×720. Only use 1920×1080 if you need the extra resolution or have many universes to display.
+    </Note>
+  </Accordion>
+
+  <Accordion title="What framerate should I target?">
+    Target framerate affects performance and smoothness:
+
+    **30 FPS** (Recommended):
+    - Standard for most VRChat users
+    - Good balance of smoothness and performance
+    - Lower CPU/GPU usage
+    - Most clients run at 30 FPS anyway
+
+    **60 FPS**:
+    - Smoother motion for high-framerate clients
+    - Higher processing requirements
+    - Larger stream bandwidth needed
+    - Only beneficial if clients can maintain 60 FPS
+
+    **Higher FPS**:
+    - Rarely needed for lighting applications
+    - Significant performance impact
+    - Not recommended unless specific use case
+
+    Set via `TargetFramerate` in your configuration. Start with 30 FPS and increase only if needed.
+  </Accordion>
+</AccordionGroup>
+
+## Streaming and Output
+
+<AccordionGroup>
+  <Accordion title="What is Spout2 and why do I need it?">
+    **Spout2** is a real-time video sharing framework for Windows that allows applications to share video frames with GPU efficiency.
+
+    **In HNode:**
+    - HNode outputs video via Spout2
+    - OBS captures this video via the Spout2 plugin
+    - No intermediate files or screen capture needed
+    - Extremely low latency and high performance
+
+    **Requirements:**
+    - Windows operating system
+    - [Spout2 for OBS plugin](https://github.com/Off-World-Live/obs-spout2-plugin)
+    - DirectX compatible GPU
+
+    Spout2 is the most efficient way to get HNode's output into OBS for streaming.
+  </Accordion>
+
+  <Accordion title="Can I stream without Spout2?">
+    Yes, but it's not recommended. Alternatives include:
+
+    **Window Capture:**
+    - Capture HNode's window directly in OBS
+    - Higher latency and CPU usage
+    - Less efficient than Spout2
+
+    **Virtual Camera:**
+    - Use virtual camera software to route video
+    - Adds extra processing overhead
+    - More complexity
+
+    **NDI:**
+    - Network Device Interface protocol
+    - Would require additional implementation
+    - Not currently supported
+
+    For best results on Windows, use Spout2. It's designed for this exact use case.
+  </Accordion>
+
+  <Accordion title="What streaming services work with HNode?">
+    HNode outputs video that you capture in OBS, so any service OBS supports works:
+
+    **Public Streaming:**
+    - YouTube Live (high latency, wide reach)
+    - Twitch (high latency, gaming-focused)
+    - VRCDN (lower latency, VR-optimized)
+
+    **Local Streaming:**
+    - **MediaMTX** (recommended for local/LAN streaming)
+    - **NGINX with RTMP module**
+    - **OBS Websocket**
+
+    **Considerations:**
+    - Public services have 5-15 second latency
+    - Local streaming (MediaMTX) has \<1 second latency
+    - Check service ToS for your use case
+    - Consider your audience size and geographic distribution
+  </Accordion>
+
+  <Accordion title="How do I set up local streaming with MediaMTX?">
+    MediaMTX is the recommended solution for low-latency local streaming:
+
+    **Setup Steps:**
+    1. Download [MediaMTX](https://github.com/bluenviron/mediamtx/releases) for your platform
+    2. Extract and run `mediamtx.exe` (or equivalent)
+    3. Configure OBS:
+       - Service: **Custom**
+       - Server: `rtmp://localhost/`
+       - Stream Key: Any ASCII text (or leave blank)
+    4. Start streaming in OBS
+    5. Access stream at: `rtspt://localhost:8554/[stream_key]`
+
+    **For network access:**
+    - Replace `localhost` with your server's IP address
+    - Ensure port 8554 is open in your firewall
+    - Use the server's IP in your VR world video player
+
+    See the [Common Issues](/troubleshooting/common-issues#mediamrtx-and-local-streaming) page for troubleshooting.
+  </Accordion>
+
+  <Accordion title="Why is my stream delayed?">
+    Stream delay (latency) can come from multiple sources:
+
+    **HNode Side:**
+    - High framerate (60+ FPS) increases processing time
+    - High resolution increases encoding time
+    - Insufficient CPU/GPU resources
+
+    **OBS Side:**
+    - Slow encoder preset (Ultra Slow/P7)
+    - High bitrate with limited bandwidth
+    - Keyframe interval too long (>2 seconds)
+    - B-frames set too high (>2)
+
+    **Streaming Side:**
+    - Public streaming services add 5-15s inherent delay
+    - Network congestion or limited bandwidth
+    - Long geographic distance to server
+
+    **Client Side:**
+    - Client FPS lower than stream FPS causes buffering
+    - Poor client network connection
+    - Video player buffering settings
+
+    For lowest latency, use local streaming (MediaMTX), 30 FPS, hardware encoding, and appropriate bitrate.
+  </Accordion>
+</AccordionGroup>
+
+## Generators and Advanced Features
+
+<AccordionGroup>
+  <Accordion title="What are generators?">
+    Generators create or modify DMX channel data programmatically:
+
+    **Available Generators:**
+    - **DMX Packet**: Direct DMX control
+    - **Static Value**: Set channels to fixed values
+    - **Strobe**: Create strobe effects
+    - **Fade**: Smooth fade transitions
+    - **Remap**: Remap channel numbers
+    - **Subtitle-based**: SRT, LRC, ASS subtitle file control
+    - **MIDIDMX**: MIDI controller input
+
+    Generators can work alongside ArtNet input or independently for automated shows and effects.
+  </Accordion>
+
+  <Accordion title="Can I run shows without a lighting console?">
+    Yes! You can use generators to create automated shows:
+
+    **Subtitle-based Automation:**
+    - Use SRT, LRC, or ASS files to script lighting cues
+    - Timeline-based control with precise timing
+    - Edit in text editors or subtitle tools
+
+    **MIDI Control:**
+    - Use MIDI controllers for real-time manual control
+    - Map MIDI notes/CC to DMX channels
+    - No lighting console software needed
+
+    **Static and Procedural:**
+    - Use Static Value generators for fixed states
+    - Combine Fade and Strobe for dynamic effects
+
+    Generators can fully replace traditional lighting control for simpler shows.
+  </Accordion>
+
+  <Accordion title="How do generators interact with ArtNet input?">
+    Generators and ArtNet input work together in the processing chain:
+
+    **Processing Order:**
+    1. ArtNet data is received
+    2. Generators process/modify data in order
+    3. Channel masking is applied
+    4. Serializer converts to video output
+
+    **Generator Behavior:**
+    - Generators can override ArtNet values on specific channels
+    - They can add to or modify existing data
+    - Processing order matters - first generator processes first
+
+    You can use generators to:
+    - Add automated effects on top of console control
+    - Fill in channels not used by your console
+    - Create backup content if ArtNet connection drops
+  </Accordion>
+
+  <Accordion title="What exporters does HNode support?">
+    Exporters output data to external systems:
+
+    **MIDIDMX Exporter:**
+    - Sends DMX data to [VRC-MIDIDMX](https://github.com/micksam7/VRC-MIDIDMX)
+    - Enables MIDI control in VRChat
+    - Useful for interactive lighting control in-world
+
+    Custom exporters can be created by implementing the `IExporter` interface, similar to custom serializers.
+  </Accordion>
+</AccordionGroup>
+
+## Performance and Optimization
+
+<AccordionGroup>
+  <Accordion title="How many universes can HNode handle?">
+    HNode can theoretically handle many universes, but practical limits depend on:
+
+    **Hardware Performance:**
+    - CPU/GPU capabilities
+    - Available RAM
+    - Network bandwidth
+
+    **Serializer Efficiency:**
+    - Some serializers are more efficient than others
+    - Binary/Ternary are generally lighter than VRSL
+
+    **Configuration:**
+    - `SerializeUniverseCount`: Maximum universes to process
+    - Lower values improve performance
+    - Only serialize what you actually need
+
+    Most systems comfortably handle 3-10 universes. Extremely dense shows might push higher, but test your specific setup.
+  </Accordion>
+
+  <Accordion title="How can I improve HNode performance?">
+    Optimization strategies:
+
+    **Reduce Processing Load:**
+    - Lower target framerate (30 FPS instead of 60)
+    - Reduce output resolution (720p instead of 1080p)
+    - Limit `SerializeUniverseCount` to only needed universes
+    - Minimize active generators
+
+    **Hardware Optimization:**
+    - Use hardware encoding in OBS (NVIDIA NVENC, AMD VCE)
+    - Close unnecessary background applications
+    - Ensure adequate cooling for sustained performance
+    - Use dedicated GPU if available
+
+    **Configuration Optimization:**
+    - Disable Graphy statistics if not needed
+    - Reduce channel masking complexity
+    - Optimize generator order and count
+
+    Start with lower settings and increase until you find the sweet spot for your hardware.
+  </Accordion>
+
+  <Accordion title="Does HNode support GPU acceleration?">
+    Yes, partially:
+
+    **GPU Usage:**
+    - Unity rendering is GPU-accelerated
+    - Texture operations use GPU
+    - Spout2 uses GPU for efficient frame sharing
+
+    **CPU Usage:**
+    - ArtNet reception and parsing (CPU)
+    - DMX data processing (CPU)
+    - Serializer logic (mostly CPU)
+
+    HNode is reasonably GPU-accelerated for rendering, but much of the DMX processing happens on CPU. Use a balanced system with decent CPU and GPU for best results.
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Where can I find logs and error messages?">
+    HNode uses Unity's logging system:
+
+    **During Runtime:**
+    - Check the Unity console in the editor
+    - Built versions output to log files
+
+    **Log File Locations:**
+    - **Windows**: `%USERPROFILE%\AppData\LocalLow\[CompanyName]\HNode\Player.log`
+    - **Linux**: `~/.config/unity3d/[CompanyName]/HNode/Player.log`
+    - **macOS**: `~/Library/Logs/[CompanyName]/HNode/Player.log`
+
+    Logs contain detailed information about initialization, errors, and runtime behavior.
+  </Accordion>
+
+  <Accordion title="What should I do if nothing works?">
+    Systematic troubleshooting approach:
+
+    **1. Verify Basics:**
+    - HNode is running (check statistics panel for updates)
+    - ArtNet is being received (packet count increasing)
+    - Correct serializer selected for your world type
+
+    **2. Test Components:**
+    - Test Spout2 output (visible in OBS?)
+    - Test ArtNet reception (use console statistics)
+    - Test serializer output (visible pixels changing?)
+
+    **3. Check Configuration:**
+    - Review show configuration file
+    - Verify ArtNet address and port settings
+    - Confirm serializer settings
+
+    **4. Isolate Issues:**
+    - Test with minimal configuration
+    - Remove all generators
+    - Disable channel masking
+    - Try default VRSL serializer
+
+    **5. Get Help:**
+    - Check the [Common Issues](/troubleshooting/common-issues) page
+    - Review this FAQ
+    - Report bugs on [GitHub Issues](https://github.com/Happyrobot33/HNode/issues)
+
+    Include logs, configuration, and detailed description when asking for help.
+  </Accordion>
+</AccordionGroup>
+
+## Still Have Questions?
+
+<CardGroup cols={2}>
+  <Card title="Common Issues" icon="wrench" href="/troubleshooting/common-issues">
+    Check out solutions to frequently encountered problems.
+  </Card>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/Happyrobot33/HNode">
+    View the source code, report issues, and contribute.
+  </Card>
+  <Card title="VRC-MIDIDMX" icon="music" href="https://github.com/micksam7/VRC-MIDIDMX">
+    Learn about MIDI DMX integration for VRChat.
+  </Card>
+  <Card title="Spout2" icon="desktop" href="https://spout.zeal.co">
+    Official Spout2 website and documentation.
+  </Card>
+</CardGroup>

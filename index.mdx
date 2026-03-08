@@ -1,97 +1,136 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Welcome to HNode"
+description: "Open source ArtNet DMX to video grid node renderer built in Unity 6 for maximum data standard flexibility"
 ---
 
-## Setting up
+## What is HNode?
 
-Get your documentation site up and running in minutes.
+HNode is a powerful Unity 6 application that bridges the gap between lighting control systems and video streaming platforms. It receives ArtNet DMX data and renders it to a video grid, enabling you to stream lighting information to virtual worlds, video platforms, and other applications via Spout2.
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
+<CardGroup cols={2}>
   <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
+    title="Quick Start"
+    icon="rocket"
+    href="/quickstart"
   >
-    Edit your docs locally and preview them in real time.
+    Get HNode up and running in minutes
   </Card>
   <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
+    title="Installation"
+    icon="download"
+    href="/installation"
   >
-    Customize the design and colors of your site to match your brand.
-  </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+    Download and install the latest release
   </Card>
   <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
+    title="OBS Setup Guide"
+    icon="video"
+    href="/guides/obs-setup"
   >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
-
-## Create beautiful pages
-
-Everything you need to create world-class documentation.
-
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
+    Configure HNode with OBS Studio
   </Card>
   <Card
-    title="Code samples"
+    title="API Reference"
     icon="code"
-    href="/essentials/code"
+    href="/api/serializers/overview"
   >
-    Add sample code to demonstrate how to use your product.
+    Explore serializers, generators, and exporters
+  </Card>
+</CardGroup>
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card
+    title="Multiple Serializer Formats"
+    icon="grid"
+  >
+    Support for VRSL, Binary Stage Flight, Ternary, and more pixel mapping formats
   </Card>
   <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
+    title="Spout2 Integration"
+    icon="arrow-right-arrow-left"
   >
-    Display images and other media.
+    Input and output video streams via Spout2 for seamless OBS integration
   </Card>
   <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
+    title="DMX Generators"
+    icon="wand-magic-sparkles"
   >
-    Write once and reuse across your docs.
+    Generate DMX data from fade, strobe, text, Twitch chat, and more
   </Card>
-</Columns>
+  <Card
+    title="MIDIDMX Export"
+    icon="music"
+  >
+    Export to VRC-MIDIDMX format for virtual world integration
+  </Card>
+  <Card
+    title="Channel Masking"
+    icon="mask"
+  >
+    Mask or isolate specific DMX channels with flexible range controls
+  </Card>
+  <Card
+    title="Show Configuration"
+    icon="floppy-disk"
+  >
+    Save and load complete show configurations as YAML files
+  </Card>
+</CardGroup>
 
-## Need inspiration?
+## Popular Use Cases
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<AccordionGroup>
+  <Accordion title="Virtual World Lighting" icon="globe">
+    Stream lighting data to VRChat, ChilloutVR, and other virtual worlds using video-based lighting systems like VRSL. HNode converts ArtNet DMX signals into video streams that can be consumed by in-world lighting systems.
+  </Accordion>
+  
+  <Accordion title="Live Streaming" icon="broadcast-tower">
+    Integrate lighting visualization into your live streams via OBS Studio. Use MediaMTX or other RTMP servers to deliver low-latency lighting overlays to platforms like Twitch, YouTube, or VRCDN.
+  </Accordion>
+  
+  <Accordion title="Lighting Console Preview" icon="desktop">
+    Preview your lighting programming in real-time without physical fixtures. Connect your lighting console via ArtNet and visualize the output before deploying to production.
+  </Accordion>
+  
+  <Accordion title="Format Transcoding" icon="repeat">
+    Convert between different pixel mapping formats. Input from one serializer format (e.g., Binary Stage Flight) and output to another (e.g., VRSL) for maximum compatibility.
+  </Accordion>
+</AccordionGroup>
+
+## Get Started
+
+<Steps>
+  <Step title="Download HNode">
+    Get the latest version from the [GitHub Releases](https://github.com/Happyrobot33/HNode/releases) page
+  </Step>
+  <Step title="Configure ArtNet">
+    Set up your ArtNet address and port to receive DMX data from your lighting console
+  </Step>
+  <Step title="Choose a Serializer">
+    Select the appropriate serializer format for your target platform (VRSL, Binary, etc.)
+  </Step>
+  <Step title="Set Up Spout Output">
+    Configure the Spout2 output name and connect it to OBS or your target application
+  </Step>
+</Steps>
+
+## Community and Support
+
+<CardGroup cols={2}>
+  <Card
+    title="GitHub Repository"
+    icon="github"
+    href="https://github.com/Happyrobot33/HNode"
+  >
+    Report issues, contribute code, or browse the source
+  </Card>
+  <Card
+    title="Troubleshooting"
+    icon="life-ring"
+    href="/troubleshooting/common-issues"
+  >
+    Find solutions to common problems
+  </Card>
+</CardGroup>

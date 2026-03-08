@@ -1,0 +1,156 @@
+---
+title: 'Serializers Overview'
+description: 'Understanding DMX serialization methods in HNode'
+---
+
+## Introduction
+
+Serializers in HNode are responsible for converting DMX channel data into visual representations that can be transmitted over video streams. Each serializer implements a different encoding strategy to balance efficiency, compatibility, and data integrity.
+
+## IDMXSerializer Interface
+
+All serializers implement the `IDMXSerializer` interface, which defines the core functionality for encoding and decoding DMX data.
+
+### Interface Methods
+
+<ParamField path="SerializeChannel" type="void">
+  Serializes a single DMX channel value into a pixel array for video output.
+  
+  **Parameters:**
+  - `pixels` (ref Color32[]): The pixel array to write to
+  - `channelValue` (byte): The DMX channel value (0-255)
+  - `channel` (int): The channel number
+  - `textureWidth` (int): Width of the output texture
+  - `textureHeight` (int): Height of the output texture
+</ParamField>
+
+<ParamField path="DeserializeChannel" type="void">
+  Deserializes a DMX channel value from an input video stream.
+  
+  **Parameters:**
+  - `tex` (Texture2D): The input texture to read from
+  - `channelValue` (ref byte): The output channel value
+  - `channel` (int): The channel number
+  - `textureWidth` (int): Width of the input texture
+  - `textureHeight` (int): Height of the input texture
+</ParamField>
+
+<ParamField path="InitFrame" type="void">
+  Called at the start of each frame to reset any internal state.
+  
+  **Parameters:**
+  - `channelValues` (ref List\<byte\>): The list of all channel values for this frame
+</ParamField>
+
+<ParamField path="CompleteFrame" type="void">
+  Called after all channels have been serialized. Used for operations that require the full frame data, such as generating CRC checksums.
+  
+  **Parameters:**
+  - `pixels` (ref Color32[]): The complete pixel array
+  - `channelValues` (ref List\<byte\>): The list of all channel values
+  - `textureWidth` (int): Width of the texture
+  - `textureHeight` (int): Height of the texture
+</ParamField>
+
+## Available Serializers
+
+<CardGroup cols={2}>
+  <Card title="VRSL" icon="grid" href="/api/serializers/vrsl">
+    Industry-standard serializer with gamma correction and RGB grid support
+  </Card>
+  
+  <Card title="Binary" icon="binary" href="/api/serializers/binary">
+    Efficient binary encoding using 8 bits per channel
+  </Card>
+  
+  <Card title="Binary Stage Flight" icon="shield-check" href="/api/serializers/binary-stage-flight">
+    Binary encoding with CRC-4 error detection for reliable transmission
+  </Card>
+  
+  <Card title="Ternary" icon="chart-scatter" href="/api/serializers/ternary">
+    Base-3 encoding for specialized use cases
+  </Card>
+  
+  <Card title="Color Binary" icon="palette" href="/api/serializers/color-binary">
+    Color-channel interleaved binary encoding
+  </Card>
+  
+  <Card title="Spiral" icon="arrows-spin" href="/api/serializers/spiral">
+    Spiral pattern serialization for visual effects
+  </Card>
+  
+  <Card title="Furality Somna" icon="star" href="/api/serializers/furality-somna">
+    Custom serializer optimized for Furality events
+  </Card>
+</CardGroup>
+
+## Choosing a Serializer
+
+### By Use Case
+
+**VRSL** - Use when:
+- Compatibility with VRSL fixtures is required
+- Gamma correction is needed
+- Multiple universes with RGB grid mode
+
+**Binary** - Use when:
+- Maximum channel density is needed
+- Simple, reliable encoding without error correction
+
+**Binary Stage Flight** - Use when:
+- Error detection via CRC is required
+- Professional-grade reliability is essential
+
+**Ternary** - Use when:
+- Experimenting with alternative encoding schemes
+- Base-3 representation provides advantages
+
+**Color Binary** - Use when:
+- Color channel interleaving provides visual benefits
+- RGB separation is desired
+
+**Spiral** - Use when:
+- Visual pattern tracking is needed
+- Debugging video transmission
+
+**Furality Somna** - Use when:
+- Working with Furality event fixtures
+- Color channel merging is required
+
+## Implementation Example
+
+```csharp
+// Implement a custom serializer
+public class CustomSerializer : IDMXSerializer
+{
+    public void Construct() { }
+    public void Deconstruct() { }
+    
+    public void InitFrame(ref List\<byte\> channelValues)
+    {
+        // Reset frame state
+    }
+    
+    public void SerializeChannel(ref Color32[] pixels, byte channelValue, 
+        int channel, int textureWidth, int textureHeight)
+    {
+        // Encode channel to pixels
+    }
+    
+    public void DeserializeChannel(Texture2D tex, ref byte channelValue, 
+        int channel, int textureWidth, int textureHeight)
+    {
+        // Decode pixels to channel value
+    }
+    
+    public void CompleteFrame(ref Color32[] pixels, ref List\<byte\> channelValues, 
+        int textureWidth, int textureHeight)
+    {
+        // Post-processing (optional)
+    }
+    
+    public void ConstructUserInterface(RectTransform rect) { }
+    public void DeconstructUserInterface() { }
+    public void UpdateUserInterface() { }
+}
+```

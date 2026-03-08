@@ -1,0 +1,313 @@
+---
+title: 'Common Issues'
+description: 'Solutions to frequently encountered problems with HNode'
+icon: 'wrench'
+---
+
+## Spout2 Issues
+
+### No Spout Senders Available in OBS
+
+<AccordionGroup>
+  <Accordion title="Spout2 senders not appearing in dropdown">
+    This is the most common Spout2 issue and usually occurs due to DirectX shared texture registry problems.
+
+    **Solutions:**
+    1. **Restart your PC** - This clears the DirectX shared texture registry and resolves most cases
+    2. Ensure both HNode and OBS are running with the same permissions (both as admin or both as regular user)
+    3. Check that you have the latest [Spout2 for OBS plugin](https://github.com/Off-World-Live/obs-spout2-plugin) installed
+    4. Verify HNode is actually running and outputting (check for the green status indicator)
+    5. Try changing the **Spout Output Name** in HNode settings to something unique like "HNode_Custom"
+
+    <Warning>
+      If you're running HNode and OBS with different permission levels, Spout2 shared textures won't be visible between applications.
+    </Warning>
+  </Accordion>
+
+  <Accordion title="Spout output shows black screen">
+    If Spout2 is connecting but showing a black output:
+
+    1. Check that ArtNet data is actually being received (verify in HNode statistics panel)
+    2. Ensure your serializer is configured correctly for your lighting system
+    3. Verify the universe addresses match between your lighting console and HNode
+    4. Check if channel masking is enabled and potentially hiding your output
+  </Accordion>
+
+  <Accordion title="Spout input not working for transcoding">
+    When using Spout2 as a deserializer for transcoding:
+
+    1. Verify the **Spout Input Name** in HNode matches the sender name exactly (case-sensitive)
+    2. Enable **Transcode** mode in the configuration
+    3. Set **Transcode Universe Count** appropriately for your setup
+    4. Ensure the input resolution matches the source Spout sender's resolution
+  </Accordion>
+</AccordionGroup>
+
+## ArtNet and Networking Issues
+
+### Lights Don't Respond to DMX Commands
+
+<AccordionGroup>
+  <Accordion title="No data received from lighting console">
+    If HNode shows no incoming ArtNet data:
+
+    **Check Network Configuration:**
+    - Verify your lighting console is outputting ArtNet on the correct network interface
+    - Ensure HNode's **ArtNet Address** is set correctly (use `0.0.0.0` to listen on all interfaces)
+    - Default **ArtNet Port** should be `6454` unless your system requires a different port
+    - Check that no firewall is blocking UDP port 6454
+
+    **Verify Console Settings:**
+    - Confirm ArtNet output is enabled in your lighting console
+    - Check that the console is sending to the correct broadcast address
+    - Verify universe numbers match between console and HNode expectations
+
+    <Tip>
+      Use the statistics panel in HNode to verify ArtNet packet reception in real-time.
+    </Tip>
+  </Accordion>
+
+  <Accordion title="Data received but lights don't work in world">
+    If HNode receives data but lights don't respond correctly:
+
+    1. **Verify serializer selection** - Ensure you're using the correct serializer for your world:
+       - VRSL for VRSL worlds
+       - Binary Stage Flight for BSF worlds
+       - Binary/Ternary for custom implementations
+    2. **Check gridnode placement** - The gridnode in your world must be positioned correctly
+    3. **Universe mapping** - Verify the universe range matches your world's expectations
+    4. **Video player URL** - Ensure the streaming URL in your world is correct
+  </Accordion>
+
+  <Accordion title="Network interface binding issues">
+    On systems with multiple network interfaces:
+
+    1. Set **ArtNet Address** to `0.0.0.0` to listen on all interfaces
+    2. Or specify the exact IP address of the interface receiving ArtNet data
+    3. Check your network adapter settings for conflicts
+    4. Disable unused network adapters that might interfere
+  </Accordion>
+</AccordionGroup>
+
+## Performance Issues
+
+### Low Frame Rate or Stuttering
+
+<AccordionGroup>
+  <Accordion title="HNode running slowly">
+    Performance optimization steps:
+
+    **Adjust Target Framerate:**
+    - Default is 60 FPS, but 30 FPS is often sufficient for lighting
+    - Lower framerates reduce CPU/GPU load and can improve stability
+    - Set **Target Framerate** in configuration to match your needs
+
+    **Resolution Optimization:**
+    - **Output Resolution**: 1920x1080 is default, consider 1280x720 for better performance
+    - Match resolution to your actual streaming requirements
+    - Larger resolutions require more processing power
+
+    **Reduce Universe Count:**
+    - Set **Serialize Universe Count** to only what you actually need
+    - Don't process more universes than your show requires
+    - Each universe adds processing overhead
+  </Accordion>
+
+  <Accordion title="OBS streaming lag or high delay">
+    When experiencing streaming latency:
+
+    **OBS Encoder Settings:**
+    - Use hardware encoding (NVIDIA NVENC or AMD VCE) instead of CPU encoding
+    - Set bitrate appropriately: 5000 Kbps for detailed visuals, 3000 Kbps for standard
+    - Don't set bitrate too high or too low - both cause issues
+    - Keyframe interval: 1-2 seconds
+
+    **Streaming Configuration:**
+    - Match OBS output FPS to your client's typical framerate (usually 30 FPS)
+    - If clients have lower FPS, they'll experience stream delays
+    - Use appropriate preset (P5/Slow for quality, P1/Faster for low latency)
+
+    **Audio Settings:**
+    - Audio bitrate: 320 kbps is recommended
+    - If experiencing audio issues, try 192 kbps
+    - Sample rate: 48 kHz
+  </Accordion>
+
+  <Accordion title="High CPU/GPU usage">
+    To reduce system resource usage:
+
+    1. Lower the target framerate to 30 FPS
+    2. Reduce output resolution to 1280x720
+    3. Limit the number of active generators
+    4. Disable Graphy statistics monitor if not needed
+    5. Close unnecessary background applications
+    6. Use hardware encoding in OBS instead of software encoding
+  </Accordion>
+</AccordionGroup>
+
+## Configuration Issues
+
+### Serializer Configuration Problems
+
+<AccordionGroup>
+  <Accordion title="Wrong serializer for world type">
+    Each world type requires a specific serializer:
+
+    **VRSL Worlds:**
+    - Use the **VRSL** serializer
+    - Configure output orientation (Horizontal Top/Bottom, Vertical Left/Right)
+    - Enable gamma correction if needed (usually required)
+    - RGB Grid Mode for specific VRSL setups
+
+    **Binary Stage Flight Worlds:**
+    - Use the **Binary Stage Flight** serializer
+    - Automatically handles CRC validation
+    - 4x4 pixel blocks with 6 channels per column
+
+    **Custom Implementations:**
+    - **Binary**: Standard binary encoding
+    - **Ternary**: Three-state encoding
+    - **Color Binary**: Color-based binary encoding
+    - **Spiral**: Spiral pattern encoding
+
+    <Note>
+      Always match the serializer to your world's gridnode implementation. Using the wrong serializer will result in no output or corrupted data.
+    </Note>
+  </Accordion>
+
+  <Accordion title="Channel masking not working">
+    When using channel masking features:
+
+    1. Define channel ranges properly with start and end values
+    2. Check if **Invert Mask** is enabled - this reverses the masking behavior
+    3. **Auto Mask on Zero** will automatically mask channels set to zero value
+    4. Verify the channel numbers account for universe offsets (channel = (universe × 512) + channel_in_universe)
+  </Accordion>
+
+  <Accordion title="Configuration file not loading">
+    Show configuration issues:
+
+    1. Ensure YAML file syntax is valid
+    2. Check for proper indentation (YAML is whitespace-sensitive)
+    3. Verify all referenced serializers and generators exist
+    4. Look for error messages in the console log
+    5. Try creating a new configuration from scratch
+  </Accordion>
+</AccordionGroup>
+
+## Streaming Issues
+
+### MediaMTX and Local Streaming
+
+<AccordionGroup>
+  <Accordion title="Cannot connect to MediaMTX stream">
+    When using MediaMTX for local streaming:
+
+    **Server Side:**
+    1. Verify MediaMTX is running (`mediamtx.exe` on Windows)
+    2. Check MediaMTX console for connection logs
+    3. Default RTMP server should be `rtmp://localhost/`
+    4. Default RTSPT playback should be `rtspt://localhost:8554/`
+
+    **OBS Side:**
+    1. Set Service to **Custom**
+    2. Server: `rtmp://localhost/` (or your custom path)
+    3. Stream Key can be any ASCII text, or leave blank
+    4. Verify you can start streaming without errors
+
+    **Client/World Side:**
+    1. Use the RTSPT URL: `rtspt://localhost:8554/[your_stream_key]`
+    2. If you didn't set a stream key, just use `rtspt://localhost:8554/stream`
+    3. Replace `localhost` with your server's IP if accessing remotely
+  </Accordion>
+
+  <Accordion title="Stream quality issues">
+    For better stream quality:
+
+    **Bitrate Settings:**
+    - 5000+ Kbps for Binary/Ternary gridnodes (high detail needed)
+    - 3000-4000 Kbps for standard lighting visuals
+    - Too low = compression artifacts
+    - Too high = buffering and delay
+
+    **Encoding Settings:**
+    - Rate Control: Constant Bitrate (CBR)
+    - Preset: Slow (Good Quality) or Medium
+    - Multipass Mode: Two Passes (Quarter Resolution)
+    - Profile: High
+    - B-Frames: 2
+
+    **Turn OFF these settings:**
+    - Look-ahead: Off
+    - Adaptive Quantization: Off
+    - Psycho-Visual Tuning: Off
+
+    <Warning>
+      Ultra low latency mode may cause more issues than it solves. Stick with standard settings for reliability.
+    </Warning>
+  </Accordion>
+
+  <Accordion title="High stream latency">
+    To reduce streaming delay:
+
+    1. Use a local streaming server (MediaMTX) instead of cloud services
+    2. Reduce keyframe interval to 1 second
+    3. Lower bitrate if bandwidth is limited
+    4. Ensure encoder preset isn't too slow (avoid P7/Ultra Slow)
+    5. Use RTSPT protocol which has lower latency than RTMP playback
+    6. Check client network connection quality
+  </Accordion>
+</AccordionGroup>
+
+## Generator Issues
+
+<AccordionGroup>
+  <Accordion title="MIDIDMX not working">
+    For [VRC-MIDIDMX](https://github.com/micksam7/VRC-MIDIDMX) integration:
+
+    1. Ensure MIDIDMX generator is added to your configuration
+    2. Verify MIDI device is properly connected
+    3. Check MIDI device permissions in your OS
+    4. Confirm MIDI channel mappings match your controller
+    5. Test MIDI input with a MIDI monitor tool first
+  </Accordion>
+
+  <Accordion title="Generator not affecting output">
+    When generators don't seem to work:
+
+    1. Verify the generator is properly added to the show configuration
+    2. Check that the generator is enabled
+    3. Ensure channel ranges don't conflict with other generators
+    4. Verify the generator is processing (check statistics)
+    5. Make sure the generator is ordered correctly in the processing chain
+  </Accordion>
+
+  <Accordion title="Subtitle generators (SRT/LRC/ASS) not displaying">
+    For subtitle-based generators:
+
+    1. Verify the subtitle file path is correct and accessible
+    2. Check the subtitle file format is valid
+    3. Ensure timing information is present in the file
+    4. Confirm channel mapping is configured correctly
+    5. Test with a simple subtitle file first
+  </Accordion>
+</AccordionGroup>
+
+## Still Having Issues?
+
+If you're still experiencing problems:
+
+<CardGroup cols={2}>
+  <Card title="Check Statistics Panel" icon="chart-line">
+    Use the Graphy statistics monitor in HNode to see real-time performance metrics, packet reception, and frame timing.
+  </Card>
+  <Card title="Review Configuration" icon="gear">
+    Double-check your show configuration file for syntax errors or incorrect settings.
+  </Card>
+  <Card title="Test Components" icon="flask">
+    Test each component individually: ArtNet reception, Spout output, serializer, then streaming.
+  </Card>
+  <Card title="Report Issues" icon="bug">
+    Found a bug? Report it on the [HNode GitHub Issues](https://github.com/Happyrobot33/HNode/issues) page.
+  </Card>
+</CardGroup>

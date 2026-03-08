@@ -1,0 +1,272 @@
+---
+title: Architecture
+description: Understanding HNode's Unity-based architecture, plugin system, and data flow
+---
+
+## Overview
+
+HNode is built as a Unity application with a modular plugin architecture that processes DMX lighting data in real-time. The system receives Art-Net DMX packets over the network, processes them through customizable generators, serializes the data into video textures, and outputs via Spout for use in other applications.
+
+## Core Architecture Components
+
+<CardGroup cols={2}>
+  <Card title="Art-Net Receiver" icon="satellite-dish">
+    Listens for incoming Art-Net DMX packets on UDP port 6454 (configurable)
+  </Card>
+  <Card title="DMX Manager" icon="sitemap">
+    Manages DMX universe data with support for up to 16,384 channels across multiple universes
+  </Card>
+  <Card title="Plugin System" icon="puzzle-piece">
+    Extensible architecture with Serializers, Generators, and Exporters
+  </Card>
+  <Card title="Texture Pipeline" icon="image">
+    Converts DMX data to/from video textures using configurable pixel mapping formats
+  </Card>
+</CardGroup>
+
+## Application Structure
+
+The Unity application follows a centralized architecture with the `Loader` class serving as the main orchestrator.
+
+### Loader (Main Orchestrator)
+
+The `Loader.cs` component handles:
+
+- **Plugin Discovery**: Automatically discovers all implementations of `IDMXSerializer`, `IDMXGenerator`, and `IExporter` interfaces using reflection
+- **Configuration Management**: Loads and saves show configurations as YAML files (.shwcfg)
+- **Component Initialization**: Sets up Spout receivers/senders, Art-Net receiver, and texture readers/writers
+- **UI Coordination**: Manages dynamic UI generation for all active plugins
+
+```csharp Loader.cs:46-49
+//load in all the serializers
+serializers = GetAllInterfaceImplementations<IDMXSerializer>();
+generators = GetAllInterfaceImplementations<IDMXGenerator>();
+exporters = GetAllInterfaceImplementations<IExporter>();
+```
+
+### Show Configuration
+
+The `ShowConfiguration` class is the heart of HNode's configuration system, defining:
+
+<AccordionGroup>
+  <Accordion title="Serialization Settings">
+    - **Serializer**: Converts DMX bytes to video pixels
+    - **Deserializer**: Converts video pixels back to DMX bytes
+    - **Transcode Mode**: Enable to convert between different pixel mapping formats
+    - **Universe Counts**: Configure how many universes to process
+  </Accordion>
+  
+  <Accordion title="Channel Masking">
+    - **Masked Channels**: List\<DMXChannelRange\> defining channels to hide/show
+    - **Invert Mask**: Flip behavior to only show masked channels
+    - **Auto Mask on Zero**: Automatically make zero-value channels transparent
+  </Accordion>
+  
+  <Accordion title="Input/Output Configuration">
+    - **Spout Names**: Input and output Spout stream names
+    - **Art-Net Settings**: IP address (0.0.0.0 for all interfaces) and port
+    - **Resolutions**: Separate input/output texture resolutions
+    - **Framerate**: Target application framerate (1-60 FPS)
+  </Accordion>
+</AccordionGroup>
+
+## Data Flow Pipeline
+
+HNode processes DMX data through a well-defined pipeline every frame:
+
+<Steps>
+  <Step title="Art-Net Reception">
+    The `ArtNetReceiver` listens on UDP for incoming Art-Net packets. When received, the `DmxManager` stores the 512-byte universe data in a dictionary keyed by universe number.
+    
+    ```csharp DmxManager.cs:64-75
+    public void ReceivedDmxPacket(ReceivedData<DmxPacket> receivedData)
+    {
+        var packet = receivedData.Packet;
+        var universe = packet.Universe;
+        if (!DmxDictionary.ContainsKey(universe)) 
+            DmxDictionary.Add(universe, packet.Dmx);
+        Buffer.BlockCopy(packet.Dmx, 0, DmxDictionary[universe], 0, 512);
+    }
+    ```
+  </Step>
+  
+  <Step title="DMX Merging">
+    The `TextureWriter` merges all universes into a single contiguous List\<byte\>. In transcode mode, it uses data from the `TextureReader` instead of Art-Net.
+    
+    ```csharp TextureWriter.cs:76-96
+    if (Loader.showconf.Transcode)
+    {
+        mergedDmxValues = reader.dmxData.ToList();
+    }
+    else if (dmxManager.Universes().Length != 0)
+    {
+        var universeCount = dmxManager.Universes().Max() + 1;
+        for (ushort u = 0; u < universeCount; u++)
+        {
+            byte[] dmxValues = dmxManager.DmxValues(u);
+            mergedDmxValues.AddRange(dmxValues);
+        }
+    }
+    ```
+  </Step>
+  
+  <Step title="Generator Processing">
+    Each active `IDMXGenerator` modifies the DMX data in sequence. Generators can read, write, or transform channel values.
+    
+    ```csharp TextureWriter.cs:99-105
+    //now run the generators in order
+    foreach (var generator in Loader.showconf.Generators)
+    {
+        generator.GenerateDMX(ref mergedDmxValues);
+    }
+    ```
+  </Step>
+  
+  <Step title="Serialization">
+    The active `IDMXSerializer` converts each DMX channel value into pixels in a Color32[] array, applying channel masking rules.
+    
+    ```csharp TextureWriter.cs:113-146
+    var ChannelsToSerialize = Math.Min(
+        (long)Loader.showconf.SerializeUniverseCount * 512, 
+        mergedDmxValues.Count
+    );
+    for (int i = 0; i < ChannelsToSerialize; i++)
+    {
+        // Check masking rules
+        if (isMasked) continue;
+        
+        Loader.showconf.Serializer.SerializeChannel(
+            ref pixels, mergedDmxValues[i], i, 
+            TextureWidth, TextureHeight
+        );
+    }
+    ```
+  </Step>
+  
+  <Step title="Export & Output">
+    Each active `IExporter` processes the final DMX data. The pixel array is uploaded to a Texture2D and sent via Spout.
+    
+    ```csharp TextureWriter.cs:150-162
+    Loader.showconf.Serializer.CompleteFrame(
+        ref pixels, ref mergedDmxValues, 
+        TextureWidth, TextureHeight
+    );
+    foreach (var exporter in Loader.showconf.Exporters)
+    {
+        exporter.CompleteFrame(ref mergedDmxValues);
+    }
+    
+    texture.SetPixels32(pixels);
+    texture.Apply();
+    ```
+  </Step>
+</Steps>
+
+## Plugin System
+
+HNode's extensibility comes from its plugin interface system. All plugins implement:
+
+### IConstructable Interface
+
+```csharp IConstructable.cs:4-8
+public interface IConstructable
+{
+    void Construct();   // Called when plugin is activated
+    void Deconstruct(); // Called when plugin is deactivated
+}
+```
+
+### IUserInterface Interface
+
+Plugins can create custom UI elements that appear in the HNode interface:
+
+- `ConstructUserInterface(RectTransform rect)`: Create UI elements
+- `DeconstructUserInterface()`: Clean up UI elements
+- `UpdateUserInterface()`: Update UI values each frame
+
+<Tip>
+All plugins are automatically discovered at startup using reflection. Simply implement the appropriate interface and HNode will find it!
+</Tip>
+
+### Plugin Lifecycle
+
+1. **Discovery**: On startup, `Loader` scans all assemblies for interface implementations
+2. **Construction**: When added to a show configuration, `Construct()` is called
+3. **Execution**: Plugin methods are called each frame during the data pipeline
+4. **Deconstruction**: When removed or app closes, `Deconstruct()` is called
+
+## Transcode Mode
+
+Transcode mode enables format conversion between different pixel mapping standards:
+
+<Steps>
+  <Step title="Input">
+    A Spout source provides video in one format (e.g., VRSL)
+  </Step>
+  <Step title="Deserialization">
+    The Deserializer converts pixels back to DMX channel values
+  </Step>
+  <Step title="Re-serialization">
+    The Serializer converts DMX to a different pixel format (e.g., Binary)
+  </Step>
+  <Step title="Output">
+    The converted video is sent via Spout in the new format
+  </Step>
+</Steps>
+
+<Note>
+In transcode mode, Art-Net input is disabled and the `TextureReader` provides DMX data instead of the `DmxManager`.
+</Note>
+
+## Configuration Persistence
+
+Show configurations are saved as YAML files with the `.shwcfg` extension:
+
+```yaml
+# Example show configuration
+serializer: !VRSL
+  gammaCorrection: true
+  rgbGridMode: false
+  outputConfig: 0
+
+transcode: false
+transcodeUniverseCount: 3
+serializeUniverseCount: 2147483647
+
+generators:
+- !Strobe
+  channel: 0.1
+  valueOn: 255
+  valueOff: 0
+  frequency: 2
+
+exporters:
+- !MIDIDMX
+  midiDevice: "loopMIDI Port"
+  channelsPerUpdate: 100
+```
+
+<Warning>
+Always use the Save/Load buttons in HNode rather than manually editing YAML files. Manual edits may cause parsing errors.
+</Warning>
+
+## Performance Considerations
+
+HNode is optimized for real-time performance:
+
+- **Unity Profiler Integration**: Key sections are wrapped in `Profiler.BeginSample()`/`EndSample()`
+- **Array Pre-allocation**: DMX lists use `EnsureCapacity()` to avoid resizing
+- **Minimal GC Pressure**: Reuses arrays and avoids unnecessary allocations
+- **Configurable Universe Counts**: Limit processing to only needed universes
+
+```csharp TextureWriter.cs:166-172
+frameTime.text = $"Serialization Time: {timer.ElapsedMilliseconds} ms";
+frameTime.text += $"\nDMX Channels: {mergedDmxValues.Count}";
+var bytesPerSecond = mergedDmxValues.Count / UnityEngine.Time.smoothDeltaTime;
+var prettyBytes = ByteSize.FromBytes(bytesPerSecond).ToString("0.##");
+frameTime.text += $"\nData Throughput: {prettyBytes}/s";
+```
+
+<Tip>
+Monitor the serialization time display in HNode. If it exceeds 16ms, reduce the number of universes or lower the target framerate.
+</Tip>

@@ -1,0 +1,331 @@
+---
+title: "Spout Input/Output"
+description: "Configure Spout2 texture sharing for both input and output in HNode"
+---
+
+HNode uses Spout2 for high-performance texture sharing on Windows. Spout allows zero-copy GPU texture sharing between applications, enabling real-time video routing without CPU overhead.
+
+## What is Spout?
+
+Spout is a Windows-only system for sharing textures between applications via shared GPU memory. It provides:
+
+- **Zero-copy texture sharing**: Textures stay in GPU memory
+- **Real-time performance**: No encoding/decoding overhead
+- **Multiple senders/receivers**: Many applications can share textures simultaneously
+- **Resolution independent**: Automatically handles resolution changes
+
+## Spout Output
+
+HNode's Spout output sends rendered DMX textures to other applications like OBS Studio.
+
+### Configuration
+
+The Spout output name is configured in your [show configuration](/guides/show-configuration):
+
+```yaml
+spoutOutputName: HNode Output
+```
+
+<Steps>
+  <Step title="Set Output Name">
+    In the HNode interface or your `.shwcfg` file, set the `spoutOutputName` field to a unique identifier.
+    
+    <Tip>
+    Use descriptive names like "HNode VRSL Output" or "HNode Club Lights" if running multiple instances.
+    </Tip>
+  </Step>
+
+  <Step title="Configure Output Resolution">
+    Set your desired output resolution in the show configuration:
+    ```yaml
+    outputResolution:
+      width: 1920
+      height: 1080
+    ```
+    
+    The output resolution determines the size of the texture sent via Spout.
+  </Step>
+
+  <Step title="Verify Output">
+    1. Start HNode
+    2. Open a Spout receiver (like OBS with Spout plugin)
+    3. Look for your Spout sender name in the receiver's sender list
+    
+    <Note>
+    If the sender doesn't appear, you may need to restart your PC for Spout to register new senders.
+    </Note>
+  </Step>
+</Steps>
+
+### Output Resolution Guidelines
+
+<CardGroup cols={2}>
+  <Card title="Standard HD" icon="tv">
+    **1920x1080**
+    
+    Best for most use cases. Provides good quality while maintaining performance.
+  </Card>
+  
+  <Card title="High Resolution" icon="expand">
+    **2560x1440 or 3840x2160**
+    
+    Use for high-density pixel mappings or large-scale displays. Requires powerful GPU.
+  </Card>
+  
+  <Card title="Low Resolution" icon="compress">
+    **1280x720 or 1024x768**
+    
+    Use for simple setups or when performance is critical.
+  </Card>
+  
+  <Card title="Custom Aspect" icon="crop">
+    **1920x480, 2048x1024, etc.**
+    
+    Match your specific gridnode or display requirements.
+  </Card>
+</CardGroup>
+
+## Spout Input
+
+HNode can receive textures from other applications via Spout input, enabling advanced workflows like:
+
+- Deserialization of textures from other HNode instances
+- Processing pre-rendered content
+- Transcoding between different serializer formats
+
+### Configuration
+
+The Spout input name is configured in your show configuration:
+
+```yaml
+spoutInputName: HNode Input
+```
+
+<Steps>
+  <Step title="Set Input Name">
+    In your `.shwcfg` file, set the `spoutInputName` to match the sender you want to receive from:
+    
+    ```yaml
+    spoutInputName: Resolume Output
+    ```
+  </Step>
+
+  <Step title="Configure Input Resolution">
+    Set the expected input resolution:
+    ```yaml
+    inputResolution:
+      width: 1920
+      height: 1080
+    ```
+    
+    <Warning>
+    The input resolution should match the sender's output resolution for best results.
+    </Warning>
+  </Step>
+
+  <Step title="Enable Deserializer">
+    Configure a deserializer that matches the format of the incoming texture:
+    
+    ```yaml
+    deserializer: !VRSL
+      gammaCorrection: true
+      rgbGridMode: false
+      outputConfig: HorizontalTop
+    ```
+  </Step>
+
+  <Step title="Enable Transcoding (Optional)">
+    If you want to convert the input format to a different output format:
+    
+    ```yaml
+    transcode: true
+    transcodeUniverseCount: 3
+    ```
+    
+    This will deserialize the input using the `deserializer` and re-serialize using the `serializer`.
+  </Step>
+</Steps>
+
+### Use Cases for Spout Input
+
+<AccordionGroup>
+  <Accordion title="Format Transcoding">
+    Convert between different DMX serialization formats:
+    
+    1. Set `deserializer` to the input format (e.g., VRSL)
+    2. Set `serializer` to the output format (e.g., Binary)
+    3. Enable `transcode: true`
+    4. HNode will convert the incoming VRSL texture to Binary format
+    
+    This is useful when you have content in one format but need to output in another for compatibility.
+  </Accordion>
+
+  <Accordion title="Multi-Instance Processing">
+    Chain multiple HNode instances together:
+    
+    - Instance 1: Receives ArtNet, outputs VRSL via Spout
+    - Instance 2: Receives Instance 1's Spout output, applies effects, outputs Binary
+    - Instance 3: Receives Instance 2's output, sends to OBS
+    
+    Each instance can have different serializers, generators, and exporters.
+  </Accordion>
+
+  <Accordion title="Pre-rendered Content">
+    Process pre-rendered DMX textures:
+    
+    - Render DMX textures in a VJ application like Resolume
+    - Send via Spout to HNode
+    - HNode deserializes and optionally processes the texture
+    - Output to MIDIDMX or another Spout sender
+  </Accordion>
+
+  <Accordion title="Testing and Development">
+    Create a test pattern generator:
+    
+    - One HNode instance generates test patterns (using generators)
+    - Another instance receives the patterns via Spout
+    - Use for testing serializer implementations without ArtNet
+  </Accordion>
+</AccordionGroup>
+
+## Transcoding Workflow
+
+Transcoding allows you to convert between different serializer formats in real-time.
+
+<Steps>
+  <Step title="Configure Deserializer">
+    Set the input format to match your incoming Spout texture:
+    
+    ```yaml
+    deserializer: !VRSL
+      gammaCorrection: true
+      rgbGridMode: false
+    ```
+  </Step>
+
+  <Step title="Configure Serializer">
+    Set the output format you want to produce:
+    
+    ```yaml
+    serializer: !Binary
+      blockSize: 1
+    ```
+  </Step>
+
+  <Step title="Enable Transcoding">
+    ```yaml
+    transcode: true
+    transcodeUniverseCount: 3
+    ```
+    
+    The `transcodeUniverseCount` limits how many universes are transcoded, which can improve performance if you don't need all universes.
+  </Step>
+
+  <Step title="Set Input Source">
+    Point the Spout input to your source:
+    
+    ```yaml
+    spoutInputName: Source Application Output
+    ```
+  </Step>
+
+  <Step title="Test Transcoding">
+    1. Start the source application (must be sending Spout)
+    2. Start HNode with transcoding configuration
+    3. Verify the output matches the expected format
+    4. Use OBS to capture the transcoded output
+  </Step>
+</Steps>
+
+## Performance Considerations
+
+<CardGroup cols={2}>
+  <Card title="Resolution Matching" icon="equals">
+    Match input and output resolutions when possible to avoid unnecessary scaling.
+  </Card>
+  
+  <Card title="Universe Limits" icon="filter">
+    Use `transcodeUniverseCount` and `serializeUniverseCount` to limit processing to only the universes you need.
+  </Card>
+  
+  <Card title="GPU Usage" icon="microchip">
+    Spout uses GPU memory. Monitor GPU memory usage when running multiple instances or high resolutions.
+  </Card>
+  
+  <Card title="Framerate" icon="clock">
+    Set `targetFramerate` appropriately. Higher framerates increase GPU load but provide smoother output.
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Spout sender not appearing">
+    - Ensure HNode is running and outputting
+    - Restart the receiving application
+    - Restart your PC (Spout registration sometimes requires a reboot)
+    - Check Windows Graphics settings haven't disabled GPU sharing
+  </Accordion>
+
+  <Accordion title="Black or corrupted input">
+    - Verify the input resolution matches the sender's output
+    - Check the deserializer format matches the incoming texture format
+    - Ensure the sender is actively transmitting (not paused or stopped)
+    - Try disabling gamma correction in the deserializer
+  </Accordion>
+
+  <Accordion title="Poor transcoding performance">
+    - Lower the `transcodeUniverseCount`
+    - Reduce input and output resolutions
+    - Lower the target framerate
+    - Close other GPU-intensive applications
+  </Accordion>
+
+  <Accordion title="Input and output names conflict">
+    Ensure `spoutInputName` and `spoutOutputName` are different:
+    ```yaml
+    spoutInputName: HNode Input
+    spoutOutputName: HNode Output
+    ```
+    
+    Using the same name for both will cause conflicts.
+  </Accordion>
+</AccordionGroup>
+
+## Advanced: Multiple HNode Instances
+
+You can run multiple HNode instances simultaneously for complex workflows:
+
+```yaml
+# Instance 1: ArtNet Receiver
+spoutOutputName: HNode Primary Output
+serializer: !VRSL
+# ... receives ArtNet, outputs VRSL via Spout
+
+# Instance 2: Format Converter
+spoutInputName: HNode Primary Output
+spoutOutputName: HNode Binary Output
+deserializer: !VRSL
+serializer: !Binary
+transcode: true
+# ... receives from Instance 1, converts to Binary
+
+# Instance 3: MIDIDMX Sender
+spoutInputName: HNode Binary Output
+deserializer: !Binary
+exporters:
+  - !MIDIDMX
+    midiDevice: loopMIDI Port
+# ... receives from Instance 2, sends to VRChat
+```
+
+<Note>
+Each instance requires separate configuration files and will use additional system resources.
+</Note>
+
+## Next Steps
+
+- Set up [OBS Studio](/guides/obs-setup) to capture HNode's Spout output
+- Configure [streaming](/guides/streaming) to send the output to VRChat
+- Learn about [show configurations](/guides/show-configuration) to save your Spout setup
+- Explore [MIDIDMX](/guides/mididmx) for direct VRChat integration

@@ -1,0 +1,71 @@
+---
+title: 'Art-Net Settings'
+description: 'Configure Art-Net network settings for DMX input'
+---
+
+## Overview
+
+HNode receives DMX data via the Art-Net protocol over UDP. These settings control the network interface and port used for receiving Art-Net packets.
+
+## Configuration Properties
+
+<ParamField path="ArtNetAddress" type="string" default="0.0.0.0">
+  The IP address to listen for Art-Net information. Set this to `0.0.0.0` to automatically find Art-Net information across all network interfaces. You can also specify a specific network interface address to listen on a particular network adapter.
+
+  **Examples:**
+  - `0.0.0.0` - Listen on all network interfaces (recommended)
+  - `192.168.1.100` - Listen only on the interface with this IP address
+  - `10.0.0.5` - Listen on a specific interface in a different subnet
+</ParamField>
+
+<ParamField path="ArtNetPort" type="integer" default="6454">
+  The UDP port to listen for Art-Net packets. The standard Art-Net port is 6454. Only change this if you're using a non-standard Art-Net implementation.
+</ParamField>
+
+## YAML Configuration Example
+
+```yaml
+# Listen on all network interfaces (recommended)
+ArtNetAddress: 0.0.0.0
+ArtNetPort: 6454
+```
+
+```yaml
+# Listen on a specific network interface
+ArtNetAddress: 192.168.1.100
+ArtNetPort: 6454
+```
+
+```yaml
+# Use a custom port
+ArtNetAddress: 0.0.0.0
+ArtNetPort: 7000
+```
+
+## Network Configuration Tips
+
+### Finding Art-Net Automatically
+
+The recommended configuration is to use `0.0.0.0` as the `ArtNetAddress`, which allows HNode to receive Art-Net packets on all available network interfaces. This is useful when:
+
+- You have multiple network adapters
+- You're not sure which interface Art-Net will arrive on
+- You want maximum flexibility in your network setup
+
+### Specific Interface Binding
+
+You can bind to a specific network interface by setting `ArtNetAddress` to the IP address of that interface. This is useful when:
+
+- You have multiple Art-Net sources on different networks
+- You want to isolate Art-Net traffic to a specific adapter
+- You need to avoid conflicts with other applications
+
+### Firewall Configuration
+
+Make sure your firewall allows incoming UDP traffic on the configured `ArtNetPort`. Art-Net uses UDP, not TCP.
+
+## Related Settings
+
+- [Resolution](/configuration/resolution) - Configure input and output resolutions
+- [Masking](/configuration/masking) - Mask specific DMX channels
+- [Transcoding](/configuration/transcoding) - Convert between pixel mapping formats

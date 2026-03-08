@@ -1,0 +1,441 @@
+---
+title: Serializers
+description: Understanding pixel mapping formats and how serializers convert DMX data to video textures
+---
+
+## What are Serializers?
+
+Serializers are the core plugins that convert DMX channel values (bytes) into pixel data in a video texture. They define the **pixel mapping format** - the spatial arrangement of how lighting channels are encoded into an image.
+
+<CardGroup cols={2}>
+  <Card title="Serialization" icon="arrow-right">
+    Converts DMX bytes → Video pixels
+  </Card>
+  <Card title="Deserialization" icon="arrow-left">
+    Converts Video pixels → DMX bytes
+  </Card>
+  <Card title="Bidirectional" icon="arrows-left-right">
+    Can both encode and decode data
+  </Card>
+  <Card title="Configurable" icon="sliders">
+    Each serializer has custom settings
+  </Card>
+</CardGroup>
+
+## The IDMXSerializer Interface
+
+All serializers implement the `IDMXSerializer` interface, which defines the contract for converting between DMX and video:
+
+```csharp IDMXSerializer.cs:7-41
+public interface IDMXSerializer : IUserInterface<IDMXGenerator>, IConstructable
+{
+    /// <summary>
+    /// Serializes a channel from a raw byte representation, to a output video stream.
+    /// </summary>
+    void SerializeChannel(ref Color32[] pixels, byte channelValue, int channel, 
+                         int textureWidth, int textureHeight);
+    
+    /// <summary>
+    /// Deserializes a channel from a input video stream, to a raw byte representation.
+    /// </summary>
+    void DeserializeChannel(Texture2D tex, ref byte channelValue, int channel, 
+                           int textureWidth, int textureHeight);
+    
+    /// <summary>
+    /// Called at the start of each frame to reset any state.
+    /// </summary>
+    void InitFrame(ref List<byte> channelValues);
+    
+    /// <summary>
+    /// Called after all channels have been serialized for the current frame.
+    /// Can be used to for example generate a CRC block area, or operate on multiple channels at once.
+    /// </summary>
+    void CompleteFrame(ref Color32[] pixels, ref List<byte> channelValues, 
+                       int textureWidth, int textureHeight);
+}
+```
+
+### Lifecycle Methods
+
+<Steps>
+  <Step title="InitFrame">
+    Called once per frame before any channels are processed. Use to reset counters or prepare state.
+  </Step>
+  
+  <Step title="SerializeChannel / DeserializeChannel">
+    Called for each DMX channel. Write/read pixels in the texture at the appropriate location.
+  </Step>
+  
+  <Step title="CompleteFrame">
+    Called after all channels are processed. Use for post-processing like CRC blocks or global operations.
+  </Step>
+</Steps>
+
+<Tip>
+Serializers have access to the full channel array and can read/write any pixel. This enables advanced features like error correction codes or channel interdependencies.
+</Tip>
+
+## Available Serializers
+
+HNode includes several built-in serializers for different use cases:
+
+### VRSL (VR Stage Lighting)
+
+**Format**: Grid-based, 16×16 pixel blocks per channel
+
+<CardGroup cols={2}>
+  <Card title="Block Size" icon="grid">
+    16×16 pixels per channel
+  </Card>
+  <Card title="Blocks Per Column" icon="bars">
+    13 channels vertically
+  </Card>
+  <Card title="Channels Per Universe" icon="hashtag">
+    512 (DMX standard)
+  </Card>
+  <Card title="Orientation" icon="arrows-up-down-left-right">
+    4 layout options
+  </Card>
+</CardGroup>
+
+**Features**:
+- **Gamma Correction**: Optional sRGB ↔ Linear conversion
+- **RGB Grid Mode**: Encodes 3 universes as R/G/B channels on one grid
+- **Layout Options**: HorizontalTop, HorizontalBottom, VerticalLeft, VerticalRight
+- **Alpha Encoding**: Uses alpha channel to encode transparency
+
+```csharp SerializerVRSL.cs:26-61
+public void SerializeChannel(ref Color32[] pixels, byte channelValue, int channel, 
+                             int textureWidth, int textureHeight)
+{
+    GetPositionData(channel, out int x, out int y, out int universeOffset);
+    
+    // Apply layout transformation
+    switch (outputConfig)
+    {
+        case OutputConfigs.HorizontalTop:
+            x += universeOffset;
+            break;
+        case OutputConfigs.VerticalLeft:
+            int temp = x;
+            x = y;
+            y = temp;
+            y += universeOffset;
+            y = textureHeight - y - blockSize;
+            break;
+        // ...
+    }
+    
+    var color = new Color(
+        channelValue / 255f,
+        channelValue / 255f,
+        channelValue / 255f,
+        Util.GetBlockAlpha(channelValue)
+    );
+    if (GammaCorrection) { color = color.linear; }
+    TextureWriter.MakeColorBlock(ref pixels, x, y, color, blockSize);
+}
+```
+
+<Note>
+VRSL is the most widely supported format in VRChat for stage lighting systems. It's designed by Rollthered and used by many VR performance venues.
+</Note>
+
+### Binary
+
+**Format**: Bit-expansion encoding, 4×4 pixel blocks per bit
+
+<CardGroup cols={2}>
+  <Card title="Block Size" icon="grid">
+    4×4 pixels per bit
+  </Card>
+  <Card title="Blocks Per Column" icon="bars">
+    52 bits vertically
+  </Card>
+  <Card title="Bit Expansion" icon="expand">
+    8 bits per channel = 8 blocks
+  </Card>
+  <Card title="Density" icon="compress">
+    Very space-efficient
+  </Card>
+</CardGroup>
+
+**How it works**: Each byte is split into 8 individual bits, and each bit gets its own 4×4 pixel block (white for 1, black for 0).
+
+```csharp SerializerBinary.cs:16-38
+public void SerializeChannel(ref Color32[] pixels, byte channelValue, int channel, 
+                             int textureWidth, int textureHeight)
+{
+    // Split the value into 8 bits
+    var bits = new BitArray(new byte[] { channelValue });
+    
+    for (int i = 0; i < bits.Length; i++)
+    {
+        GetPositionData(channel, i, out int x, out int y);
+        if (x >= textureWidth || y >= textureHeight) continue;
+        
+        var color = new Color32(
+            (byte)(bits[i] ? 255 : 0),
+            (byte)(bits[i] ? 255 : 0),
+            (byte)(bits[i] ? 255 : 0),
+            Util.GetBlockAlpha(channelValue)
+        );
+        TextureWriter.MakeColorBlock(ref pixels, x, y, color, blockSize);
+    }
+}
+```
+
+<Tip>
+Binary format provides the highest channel density per pixel, making it ideal for large DMX setups with limited texture resolution.
+</Tip>
+
+### Ternary
+
+**Format**: Base-3 encoding, 6 ternary digits per channel
+
+<CardGroup cols={2}>
+  <Card title="Block Size" icon="grid">
+    4×4 pixels per digit
+  </Card>
+  <Card title="Blocks Per Column" icon="bars">
+    48 digits vertically
+  </Card>
+  <Card title="Base-3 Encoding" icon="calculator">
+    6 ternary digits per byte
+  </Card>
+  <Card title="Intensity Levels" icon="signal">
+    0, 127, 255 per digit
+  </Card>
+</CardGroup>
+
+**How it works**: Each byte (0-255) is converted to a 6-digit base-3 number, where each digit (0, 1, or 2) is mapped to intensity levels.
+
+```csharp SerializerTernary.cs:89-104
+public byte[] convertToTernary(byte N)
+{
+    if (N == 0) return new byte[6];
+    
+    byte[] bytes = new byte[6];
+    int index = 5;
+    for (int i = 0; i < 6; i++)
+    {
+        bytes[index--] = (byte)(N % 3);
+        N /= 3;
+    }
+    return bytes;
+}
+```
+
+### BinaryStageFlight
+
+**Format**: Optimized binary format for StageFlight systems
+
+Similar to Binary but with layout optimizations for StageFlight's specific use cases in VR stage environments.
+
+### ColorBinary
+
+**Format**: Binary encoding using RGB channels
+
+Encodes binary data into the R, G, and B channels separately, effectively tripling the data density at the cost of color-accurate rendering.
+
+### FuralitySomna
+
+**Format**: Custom format for Furality Somna events
+
+Optimized layout for the Furality Somna virtual convention's lighting infrastructure.
+
+### Spiral
+
+**Format**: Spiral pattern pixel mapping
+
+Arranges channels in a spiral pattern from center outward, useful for certain radial fixture arrangements.
+
+## Choosing a Serializer
+
+Use this guide to pick the right serializer:
+
+<AccordionGroup>
+  <Accordion title="Use VRSL when...">
+    - Working with VRChat or other VR platforms
+    - Need wide compatibility with existing systems
+    - Want human-readable channel layout
+    - Using gamma-corrected rendering pipelines
+    - Working with existing VRSL fixtures
+  </Accordion>
+  
+  <Accordion title="Use Binary when...">
+    - Need maximum channel density
+    - Have limited texture resolution
+    - Working with 10+ universes
+    - Texture bandwidth is a concern
+    - Color accuracy isn't required
+  </Accordion>
+  
+  <Accordion title="Use Ternary when...">
+    - Need better error tolerance than binary
+    - Want visual distinction between states
+    - Working with noisy video transmission
+    - Experimenting with alternative encodings
+  </Accordion>
+  
+  <Accordion title="Use specialized formats when...">
+    - Working with specific event/venue systems
+    - Need compatibility with existing infrastructure
+    - Have custom fixture layouts
+    - Venue requires specific format
+  </Accordion>
+</AccordionGroup>
+
+## Block Rendering System
+
+Serializers use HNode's block rendering utilities to draw channel data:
+
+### MakeColorBlock
+
+Fills a square area with a solid color:
+
+```csharp TextureWriter.cs:187-198
+public static void MakeColorBlock(ref Color32[] pixels, int x, int y, 
+                                  Color32 color, int size)
+{
+    for (int i = 0; i < size; i++)
+    {
+        for (int j = 0; j < size; j++)
+        {
+            int index = PixelToIndex(x + i, y + j);
+            if (index == -1) return;
+            pixels[index] = color;
+        }
+    }
+}
+```
+
+### MixColorBlock
+
+Writes to a specific color channel (RGB):
+
+```csharp TextureWriter.cs:200-231
+public static void MixColorBlock(ref Color32[] pixels, int x, int y, 
+                                 byte channelValue, ColorChannel channel, int size)
+{
+    for (int i = 0; i < size; i++)
+    {
+        for (int j = 0; j < size; j++)
+        {
+            int index = PixelToIndex(x + i, y + j);
+            if (index == -1) return;
+            Color32 pixelColor = pixels[index];
+            
+            switch (channel)
+            {
+                case ColorChannel.Red:
+                    pixelColor.r = channelValue;
+                    break;
+                case ColorChannel.Green:
+                    pixelColor.g = channelValue;
+                    break;
+                case ColorChannel.Blue:
+                    pixelColor.b = channelValue;
+                    break;
+            }
+            pixelColor.a = 255;
+            pixels[index] = pixelColor;
+        }
+    }
+}
+```
+
+<Tip>
+When writing custom serializers, always use these block utilities. They handle bounds checking and coordinate conversion automatically.
+</Tip>
+
+## Serializer Configuration
+
+Serializers are configured in the show configuration:
+
+```yaml
+serializer: !VRSL
+  gammaCorrection: true
+  rgbGridMode: false
+  outputConfig: 0  # HorizontalTop
+
+deserializer: !VRSL
+  gammaCorrection: true
+  rgbGridMode: false
+  outputConfig: 0
+```
+
+<Note>
+You can use different serializers for input (deserializer) and output (serializer) when in transcode mode. This enables format conversion between systems.
+</Note>
+
+## Alpha Channel Encoding
+
+HNode uses a clever alpha channel encoding to represent zero values:
+
+```csharp
+Util.GetBlockAlpha(byte channelValue)
+{
+    return channelValue == 0 ? (byte)0 : (byte)255;
+}
+```
+
+This makes zero-value channels transparent in the output video, allowing:
+
+- Visual identification of active channels
+- Compositing multiple DMX streams
+- Overlay effects in video processing
+
+<Warning>
+When reading HNode video output, always check the alpha channel. Transparent pixels (alpha=0) represent channel value 0, regardless of RGB values.
+</Warning>
+
+## Creating Custom Serializers
+
+To create a custom serializer:
+
+<Steps>
+  <Step title="Implement IDMXSerializer">
+    Create a class implementing the `IDMXSerializer` interface.
+  </Step>
+  
+  <Step title="Define Block Layout">
+    Determine your `blockSize` and `blocksPerCol` constants.
+  </Step>
+  
+  <Step title="Implement GetPositionData">
+    Write a method to convert channel index to (x, y) pixel coordinates.
+  </Step>
+  
+  <Step title="Implement SerializeChannel">
+    Use `TextureWriter.MakeColorBlock` to write pixels at the calculated position.
+  </Step>
+  
+  <Step title="Implement DeserializeChannel">
+    Read pixels using `TextureReader.GetColor` and convert back to byte values.
+  </Step>
+  
+  <Step title="Test">
+    HNode will automatically discover your serializer on next launch.
+  </Step>
+</Steps>
+
+<Tip>
+Study the existing serializers (VRSL, Binary, Ternary) as templates. They demonstrate different approaches to position calculation and encoding.
+</Tip>
+
+## Performance Considerations
+
+- **Block Size**: Smaller blocks = more channels per texture, but slower rendering
+- **Color Operations**: Gamma correction adds computational cost
+- **Bounds Checking**: Always validate coordinates before writing pixels
+- **Frame Buffer Size**: Pre-allocate `Color32[]` arrays to avoid GC
+
+```csharp TextureWriter.cs:61-67
+// Clear texture efficiently
+Array.Clear(pixels, 0, pixels.Length);
+```
+
+<Note>
+Serializer performance directly impacts overall frame rate. Profile your custom serializers using Unity's Profiler tool.
+</Note>

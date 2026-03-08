@@ -1,0 +1,130 @@
+---
+title: 'Subtitle Formats'
+description: 'Display subtitles from SRT, LRC, and ASS files'
+---
+
+## Overview
+
+HNode includes three generators for displaying time-synchronized subtitles from common subtitle formats:
+
+- **SRT** - SubRip subtitle format
+- **LRC** - Lyric file format (used for song lyrics)
+- **ASS** - Advanced SubStation Alpha format
+
+All three extend the base `Text` generator with time-synchronized playback.
+
+## SRT Generator (SubRip)
+
+### Format
+
+SRT files use numbered entries with timestamps:
+
+```srt
+1
+00:00:01,000 --> 00:00:04,000
+First subtitle line
+
+2
+00:00:05,000 --> 00:00:08,000
+Second subtitle line
+```
+
+### Configuration
+
+```yaml
+generators:
+  - !GeneratorSRT
+    filePath: "C:/Subtitles/video.srt"
+```
+
+## LRC Generator (Lyrics)
+
+### Format
+
+LRC files use timestamp prefixes:
+
+```lrc
+[00:12.00]Line 1 lyrics
+[00:17.20]Line 2 lyrics
+[00:21.10]Line 3 lyrics
+```
+
+### Configuration
+
+```yaml
+generators:
+  - !GeneratorLRC
+    filePath: "C:/Music/song.lrc"
+```
+
+### Extended LRC Format
+
+Supports metadata tags:
+
+```lrc
+[ar:Artist Name]
+[ti:Song Title]
+[al:Album Name]
+[00:12.00]First line
+```
+
+## ASS Generator (Advanced SubStation Alpha)
+
+### Format
+
+ASS files support styling and positioning:
+
+```ass
+[Events]
+Dialogue: 0,0:00:01.00,0:00:04.00,Default,,0,0,0,,First line
+Dialogue: 0,0:00:05.00,0:00:08.00,Default,,0,0,0,,Second line
+```
+
+### Configuration
+
+```yaml
+generators:
+  - !GeneratorASS
+    filePath: "C:/Subtitles/anime.ass"
+```
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Music Lyrics" icon="music">
+    Display synchronized lyrics during performances using LRC files
+  </Card>
+  <Card title="Event Subtitles" icon="closed-captioning">
+    Show accessibility subtitles during virtual events
+  </Card>
+  <Card title="Song Information" icon="circle-info">
+    Display track metadata and lyrics for DJ sets
+  </Card>
+  <Card title="Storytelling" icon="book">
+    Create narrative experiences with timed text
+  </Card>
+</CardGroup>
+
+## Common Features
+
+- **Time Synchronization** - Subtitles display at precise timestamps
+- **File Watching** - Automatic reload when subtitle file changes
+- **UTF-8 Support** - Full Unicode character support
+- **TextMeshPro Rendering** - High-quality text rendering
+
+## Timing Considerations
+
+<Note>
+All subtitle generators use system time for synchronization. Ensure HNode starts playback at the correct offset, or manually sync timestamps to your media player.
+</Note>
+
+## File Path Configuration
+
+Subtitle file paths can be:
+- Absolute: `C:/Subtitles/file.srt`
+- Relative to HNode executable: `./Subtitles/file.lrc`
+- Network paths: `//server/share/file.ass`
+
+<Warning>
+Ensure subtitle files are accessible and not locked by other applications. HNode may need to reload files dynamically.
+</Warning>

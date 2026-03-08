@@ -1,0 +1,304 @@
+---
+title: "MIDIDMX Integration"
+description: "Configure HNode to send DMX data directly to VRChat worlds using VRC-MIDIDMX"
+---
+
+MIDIDMX is an exporter that sends DMX data directly to VRChat worlds using the [VRC-MIDIDMX](https://github.com/micksam7/VRC-MIDIDMX) system. This provides an alternative to video streaming, with lower latency and direct channel control.
+
+## What is VRC-MIDIDMX?
+
+VRC-MIDIDMX is a system created by Micca (me@micksam7.com) that enables DMX control in VRChat worlds via MIDI:
+
+- **Direct DMX control**: No video encoding/decoding overhead
+- **Low latency**: Faster response than streaming
+- **16,384 channels**: Supports up to 8 banks of 2,048 channels each
+- **Watchdog system**: Ensures connection stability
+
+<Note>
+VRC-MIDIDMX must be installed in the VRChat world you want to control. It cannot be added client-side.
+</Note>
+
+## Prerequisites
+
+<Steps>
+  <Step title="Install loopMIDI">
+    Download and install [loopMIDI](https://www.tobias-erichsen.de/software/loopmidi.html) to create virtual MIDI ports on Windows.
+    
+    1. Install loopMIDI
+    2. Open loopMIDI
+    3. Create a new port (e.g., "loopMIDI Port")
+    4. Keep loopMIDI running
+  </Step>
+
+  <Step title="Verify VRChat World Support">
+    Ensure the VRChat world you're using has VRC-MIDIDMX installed and configured. Check with the world creator or documentation.
+  </Step>
+
+  <Step title="Configure VRChat Audio">
+    In VRChat, set your audio input device to the loopMIDI port:
+    
+    1. Open VRChat settings
+    2. Go to Audio settings
+    3. Set Microphone to "loopMIDI Port" (or your custom port name)
+  </Step>
+</Steps>
+
+## Configuration
+
+MIDIDMX is added as an exporter in your show configuration.
+
+### Basic Setup
+
+```yaml
+exporters:
+  - !MIDIDMX
+    midiDevice: loopMIDI Port
+    channelsPerUpdate: 100
+    idleScanChannels: 10
+    useEditorLog: false
+```
+
+<ParamField path="midiDevice" type="string" default="loopMIDI Port" required>
+  The name of the MIDI output device to use. Must match a device name from your system.
+  
+  Set to `(none)` to disable output.
+</ParamField>
+
+<ParamField path="channelsPerUpdate" type="integer" default="100">
+  Maximum number of channels to update per frame. Keeps bandwidth usage controlled.
+  
+  <Warning>
+  Keep this at 100 or lower until VRChat fixes their buffer limitations. Higher values may cause data loss.
+  </Warning>
+</ParamField>
+
+<ParamField path="idleScanChannels" type="integer" default="10">
+  Number of channels to scan during idle periods. Ensures all channels eventually sync even if unchanged.
+  
+  Lower values reduce bandwidth usage but increase time to full sync.
+</ParamField>
+
+<ParamField path="useEditorLog" type="boolean" default="false">
+  Use Unity Editor log instead of VRChat log for watchdog detection. Only useful during development.
+</ParamField>
+
+### Adding MIDIDMX in HNode UI
+
+<Steps>
+  <Step title="Open Exporters Section">
+    In the HNode interface, navigate to the Exporters panel.
+  </Step>
+
+  <Step title="Add MIDIDMX Exporter">
+    Click the **+** button and select **MIDIDMX** from the list of available exporters.
+  </Step>
+
+  <Step title="Configure MIDI Device">
+    1. Click in the **MIDI Device** field
+    2. Type the exact name of your loopMIDI port (e.g., "loopMIDI Port")
+    3. Or select from the detected devices list if displayed
+  </Step>
+
+  <Step title="Adjust Settings (Optional)">
+    - Leave **Channels Per Update** at `100` (recommended)
+    - Leave **Idle Scan Channels** at `10` (recommended)
+    - Leave **Use Editor Log** unchecked (unless developing)
+  </Step>
+
+  <Step title="Reconnect if Needed">
+    If you change the MIDI device or need to reset the connection:
+    
+    Click the **Reconnect MIDI Device** button in the MIDIDMX settings panel.
+  </Step>
+</Steps>
+
+## How MIDIDMX Works
+
+### Connection Process
+
+<Steps>
+  <Step title="Initial Connection">
+    HNode connects to the specified MIDI device and enters **ConnectedWait** status.
+  </Step>
+
+  <Step title="World Knocking">
+    HNode sends a sequence of control messages to "knock" on the VRChat world:
+    
+    1. KnockStart (CC 127 = 101)
+    2. KnockMiddle (CC 127 = 120)
+    3. KnockFinish (CC 127 = 107)
+    
+    The world must respond to establish the connection.
+  </Step>
+
+  <Step title="Watchdog Monitoring">
+    HNode continuously sends watchdog packets (CC 127 = 127) and monitors the VRChat log file for "MIDIREADY" responses.
+    
+    When detected, status changes to **ConnectedSendingData**.
+  </Step>
+
+  <Step title="Data Transmission">
+    DMX data is sent as MIDI note events:
+    
+    - Channels 0-1023: Note On events
+    - Channels 1024-2047: Note Off events
+    - Channel value split into 7-bit MIDI velocity and note number
+    - Banks switched via Control Change messages
+  </Step>
+</Steps>
+
+### Bank System
+
+MIDIDMX supports 8 banks of 2,048 channels each (16,384 total channels):
+
+- **Bank 0**: Channels 0-2047 (Universes 0-3)
+- **Bank 1**: Channels 2048-4095 (Universes 4-7)
+- **Bank 2**: Channels 4096-6143 (Universes 8-11)
+- **Bank 3**: Channels 6144-8191 (Universes 12-15)
+- **Bank 4**: Channels 8192-10239 (Universes 16-19)
+- **Bank 5**: Channels 10240-12287 (Universes 20-23)
+- **Bank 6**: Channels 12288-14335 (Universes 24-27)
+- **Bank 7**: Channels 14336-16383 (Universes 28-31)
+
+Banks are automatically switched when sending channels in different ranges.
+
+## Status Indicators
+
+MIDIDMX provides three connection states:
+
+<CardGroup cols={3}>
+  <Card title="Disconnected" icon="xmark" color="#ef4444">
+    No MIDI device connection. Check device name and loopMIDI.
+  </Card>
+  
+  <Card title="ConnectedWait" icon="clock" color="#f59e0b">
+    Connected to MIDI, waiting for VRChat world to respond. Make sure you're in a world with VRC-MIDIDMX.
+  </Card>
+  
+  <Card title="ConnectedSendingData" icon="check" color="#10b981">
+    Actively sending data to VRChat. Lights should respond to DMX input.
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Status stuck on Disconnected">
+    - Verify loopMIDI is running
+    - Check the MIDI device name exactly matches your loopMIDI port
+    - Click "Reconnect MIDI Device" in HNode
+    - Try restarting loopMIDI
+    - Ensure no other application is using the MIDI port
+  </Accordion>
+
+  <Accordion title="Status stuck on ConnectedWait">
+    - Verify you're in a VRChat world with VRC-MIDIDMX installed
+    - Check VRChat's audio input is set to the loopMIDI port
+    - Ensure VRChat is actually running (not just the loader)
+    - Look for "MIDIREADY" in the VRChat log file:
+      - Location: `%AppData%\..\LocalLow\VRChat\VRChat\output_log_*.txt`
+    - Try leaving and rejoining the world
+  </Accordion>
+
+  <Accordion title="Lights don't respond in VRChat">
+    - Verify status is **ConnectedSendingData**
+    - Ensure ArtNet is being sent to HNode (check HNode statistics)
+    - Verify the world's gridnode configuration matches your serializer
+    - Check that fixture addresses in your lighting console match the world's setup
+    - Try sending a simple static value generator to test:
+      ```yaml
+      generators:
+        - !GeneratorStaticValue
+          startChannel: 0
+          endChannel: 50
+          value: 255
+      ```
+  </Accordion>
+
+  <Accordion title="Data is delayed or choppy">
+    - Lower `channelsPerUpdate` (try 50 or 75)
+    - Increase `idleScanChannels` slightly (try 20)
+    - Check VRChat performance (low FPS affects MIDIDMX reception)
+    - Ensure HNode is running at target framerate (check statistics)
+    - Close other applications using the MIDI port
+  </Accordion>
+
+  <Accordion title="Connection drops randomly">
+    The watchdog system should maintain connection, but if it drops:
+    
+    - Check VRChat didn't crash or reload
+    - Verify loopMIDI is still running
+    - Look for errors in the VRChat log
+    - Try increasing the watchdog timeout (requires code modification)
+  </Accordion>
+
+  <Accordion title="Can't find VRChat log file">
+    The log file location:
+    ```
+    C:\Users\YourName\AppData\LocalLow\VRChat\VRChat\output_log_*.txt
+    ```
+    
+    - Multiple log files may exist; HNode uses the most recent
+    - If using Unity Editor for world development, enable `useEditorLog: true`
+  </Accordion>
+</AccordionGroup>
+
+## Performance Optimization
+
+<CardGroup cols={2}>
+  <Card title="Limit Channel Updates" icon="gauge">
+    Keep `channelsPerUpdate` at 100 or lower. Higher values may overwhelm VRChat's buffers.
+  </Card>
+  
+  <Card title="Optimize Idle Scanning" icon="radar">
+    Lower `idleScanChannels` (5-10) reduces bandwidth but increases sync time. Balance based on your needs.
+  </Card>
+  
+  <Card title="Use Appropriate Universes" icon="layer-group">
+    Only use the banks/universes you need. Unnecessary channels still consume update bandwidth.
+  </Card>
+  
+  <Card title="Match Framerate" icon="clock">
+    Set HNode's `targetFramerate` to match your lighting console's output rate (typically 30-40 FPS).
+  </Card>
+</CardGroup>
+
+## Combining MIDIDMX with Streaming
+
+You can use MIDIDMX alongside video streaming for redundancy or different purposes:
+
+```yaml
+exporters:
+  - !MIDIDMX
+    midiDevice: loopMIDI Port
+    channelsPerUpdate: 100
+
+# Still output via Spout for OBS streaming
+spoutOutputName: HNode Output
+serializer: !VRSL
+```
+
+This allows:
+- Direct DMX control via MIDIDMX (low latency)
+- Video visualization via streaming (for viewers)
+- Fallback if one system fails
+
+## Advanced: Editor Development Mode
+
+When developing VRC-MIDIDMX worlds in Unity Editor:
+
+```yaml
+exporters:
+  - !MIDIDMX
+    midiDevice: loopMIDI Port
+    useEditorLog: true
+```
+
+This reads from the Unity Editor log instead of VRChat's log file, enabling testing without launching VRChat.
+
+## Next Steps
+
+- Configure your [show configuration](/guides/show-configuration) to save MIDIDMX settings
+- Set up [OBS streaming](/guides/streaming) for video output alongside MIDIDMX
+- Learn about [Spout I/O](/guides/spout-io) for additional texture routing options
+- Explore available [serializers](/api-reference/serializers) for different world formats

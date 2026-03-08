@@ -1,0 +1,46 @@
+---
+title: 'Time'
+description: 'Display current time as DMX channel data'
+---
+
+## Overview
+
+The `Time` generator renders the current system time to DMX channels. It extends the Text generator with automatic time formatting.
+
+## Features
+
+- Real-time clock display
+- Customizable time format
+- Automatic updates every frame
+- TextMeshPro rendering
+
+## Configuration Example
+
+```yaml
+generators:
+  - !Time
+    # Time format is configurable in UI
+```
+
+## Time Formats
+
+Common formats:
+- `HH:mm:ss` - 24-hour with seconds (14:30:45)
+- `hh:mm tt` - 12-hour with AM/PM (2:30 PM)
+- `HH:mm` - 24-hour without seconds (14:30)
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Event Clock">
+    Display current time during events and performances.
+  </Accordion>
+  
+  <Accordion title="Countdown Sync">
+    Keep virtual world attendees synchronized with real-world time.
+  </Accordion>
+  
+  <Accordion title="Recording Timestamp">
+    Add timestamps to recordings for debugging and logging.
+  </Accordion>
+</AccordionGroup>

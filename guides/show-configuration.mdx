@@ -1,0 +1,314 @@
+---
+title: "Show Configuration"
+description: "Learn how to create, save, and load show configurations in HNode using the YAML-based .shwcfg format"
+---
+
+Show configurations in HNode allow you to save and load complete setups including serializers, generators, exporters, and all system settings. Configurations are stored as YAML files with the `.shwcfg` extension.
+
+## Configuration Structure
+
+A show configuration contains:
+
+- **Serializer**: Output format (VRSL, Binary, Ternary, etc.)
+- **Deserializer**: Input format for Spout input processing
+- **Generators**: DMX data generators (text, strobe, time, etc.)
+- **Exporters**: Output targets (MIDIDMX, etc.)
+- **System Settings**: ArtNet address/port, Spout names, resolutions, framerate
+- **Transcoding Options**: Settings for converting between formats
+- **Channel Masks**: Define which channels to show or hide
+
+## Creating a Configuration
+
+<Steps>
+  <Step title="Configure HNode">
+    Set up HNode with your desired settings:
+    
+    - Select serializer/deserializer from the dropdowns
+    - Add generators (Text, Strobe, Static Value, etc.)
+    - Add exporters (MIDIDMX, etc.)
+    - Configure ArtNet address and port
+    - Set Spout input/output names
+    - Adjust output and input resolutions
+    - Set target framerate
+  </Step>
+
+  <Step title="Save Configuration">
+    1. Click the **Save** button in the HNode interface
+    2. Choose a location and filename
+    3. The file will be saved with a `.shwcfg` extension
+    
+    <Note>
+    The saved file is human-readable YAML, so you can edit it manually if needed.
+    </Note>
+  </Step>
+</Steps>
+
+## Loading a Configuration
+
+<Steps>
+  <Step title="Click Load Button">
+    Click the **Load** button in the HNode interface.
+  </Step>
+
+  <Step title="Select Configuration File">
+    Browse to and select a `.shwcfg` file.
+  </Step>
+
+  <Step title="Configuration Applied">
+    HNode will:
+    1. Unload the current configuration (deconstruct all generators and exporters)
+    2. Load the new configuration
+    3. Reconstruct all components
+    4. Update the UI to reflect the new settings
+    
+    <Warning>
+    Loading a configuration will replace your current setup. Make sure to save your current configuration first if you want to keep it.
+    </Warning>
+  </Step>
+</Steps>
+
+## Configuration File Format
+
+Show configurations use YAML format with custom tags for type identification. Here's an example structure:
+
+```yaml
+# All channel values can be represented in 2 ways
+# Either as a global integer, so 0 upwards like an array
+# As a direct Universe.Channel mapping, so Universe 3 channel 5 is 3.5
+# Alongside this, Equations are usable. So (3 * 2).(5 * 5) works
+
+serializer: !VRSL
+  gammaCorrection: true
+  rgbGridMode: false
+  outputConfig: HorizontalTop
+
+deserializer: !VRSL
+  gammaCorrection: true
+  rgbGridMode: false
+  outputConfig: HorizontalTop
+
+generators:
+  - !GeneratorStaticValue
+    startChannel: 0
+    endChannel: 10
+    value: 255
+
+exporters:
+  - !MIDIDMX
+    midiDevice: loopMIDI Port
+    channelsPerUpdate: 100
+    idleScanChannels: 10
+
+transcode: false
+transcodeUniverseCount: 3
+serializeUniverseCount: 2147483647
+
+maskedChannels: []
+invertMask: false
+autoMaskOnZero: false
+
+spoutInputName: HNode Input
+spoutOutputName: HNode Output
+artNetPort: 6454
+artNetAddress: 0.0.0.0
+targetFramerate: 60
+
+outputResolution:
+  width: 1920
+  height: 1080
+
+inputResolution:
+  width: 1920
+  height: 1080
+```
+
+## Configuration Options
+
+### Core Settings
+
+<ParamField path="serializer" type="IDMXSerializer" required>
+  The output serializer that converts DMX data to texture format. Available types:
+  - `VRSL`: Standard VRSL format
+  - `Binary`: Binary format
+  - `Ternary`: Ternary format
+  - `BinaryStageFlight`: Binary Stage Flight format
+  - `ColorBinary`: Color binary format
+  - `FuralitySomna`: Furality Somna format
+  - `Spiral`: Spiral format
+</ParamField>
+
+<ParamField path="deserializer" type="IDMXSerializer">
+  The input deserializer for processing Spout input textures. Uses the same types as serializer.
+</ParamField>
+
+<ParamField path="generators" type="list">
+  List of DMX generators. Each generator is tagged with its type (e.g., `!GeneratorStaticValue`, `!GeneratorText`).
+</ParamField>
+
+<ParamField path="exporters" type="list">
+  List of output exporters like MIDIDMX.
+</ParamField>
+
+### Transcoding
+
+<ParamField path="transcode" type="boolean" default="false">
+  Enable transcoding from the deserializer format to the serializer format. Useful for converting between different pixel mapping formats.
+</ParamField>
+
+<ParamField path="transcodeUniverseCount" type="integer" default="3">
+  Number of universes to transcode. Limits processing if you only need certain universes.
+</ParamField>
+
+<ParamField path="serializeUniverseCount" type="integer" default="int.MaxValue">
+  Maximum number of universes to serialize. Usually doesn't need to be changed.
+</ParamField>
+
+### Channel Masking
+
+<ParamField path="maskedChannels" type="list">
+  List of channel ranges to mask (make transparent). Each entry defines a start and end channel.
+  
+  Example:
+  ```yaml
+  maskedChannels:
+    - startChannel: 0
+      endChannel: 50
+    - startChannel: 100
+      endChannel: 150
+  ```
+</ParamField>
+
+<ParamField path="invertMask" type="boolean" default="false">
+  Invert the mask, making only masked channels visible.
+</ParamField>
+
+<ParamField path="autoMaskOnZero" type="boolean" default="false">
+  Automatically mask channels that are set to zero, making them transparent.
+</ParamField>
+
+### Network Settings
+
+<ParamField path="artNetPort" type="integer" default="6454">
+  ArtNet listening port.
+</ParamField>
+
+<ParamField path="artNetAddress" type="string" default="0.0.0.0">
+  IP address to listen for ArtNet data. Set to `0.0.0.0` to automatically detect across all network interfaces.
+</ParamField>
+
+### Spout Settings
+
+<ParamField path="spoutInputName" type="string" default="HNode Input">
+  Name of the Spout sender to receive input from.
+</ParamField>
+
+<ParamField path="spoutOutputName" type="string" default="HNode Output">
+  Name of the Spout sender that HNode creates for output.
+</ParamField>
+
+### Performance Settings
+
+<ParamField path="targetFramerate" type="integer" default="60">
+  Target framerate for HNode rendering (1-60 FPS).
+</ParamField>
+
+<ParamField path="outputResolution" type="object">
+  Output texture resolution:
+  ```yaml
+  outputResolution:
+    width: 1920
+    height: 1080
+  ```
+</ParamField>
+
+<ParamField path="inputResolution" type="object">
+  Input texture resolution for Spout receiver:
+  ```yaml
+  inputResolution:
+    width: 1920
+    height: 1080
+  ```
+</ParamField>
+
+## Channel Notation
+
+HNode supports flexible channel notation in configurations:
+
+### Global Channel Numbers
+```yaml
+startChannel: 0      # First channel of universe 0
+endChannel: 512      # First channel of universe 1
+```
+
+### Universe.Channel Notation
+```yaml
+startChannel: 0.0    # Universe 0, channel 0
+endChannel: 3.5      # Universe 3, channel 5
+```
+
+### Equations
+```yaml
+startChannel: (3 * 2).(5 * 5)   # Universe 6, channel 25
+```
+
+<Tip>
+Equations are particularly useful when creating configurations programmatically or when you need calculated offsets.
+</Tip>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Descriptive Names" icon="tag">
+    Name your configuration files clearly, like `club-show-vrsl.shwcfg` or `binary-test-setup.shwcfg`.
+  </Card>
+  
+  <Card title="Version Control" icon="code-branch">
+    Store configurations in version control (Git) to track changes over time.
+  </Card>
+  
+  <Card title="Backup Before Experiments" icon="floppy-disk">
+    Save your working configuration before experimenting with new settings.
+  </Card>
+  
+  <Card title="Test After Loading" icon="vial">
+    Always test that lights respond correctly after loading a configuration.
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Configuration won't load">
+    - Verify the file has a `.shwcfg` extension
+    - Check YAML syntax (indentation, colons, etc.)
+    - Ensure all referenced types (serializers, generators) are valid
+    - Look for error messages in the HNode console
+  </Accordion>
+
+  <Accordion title="Settings don't persist after loading">
+    HNode uses a deferred loading system. If settings appear incorrect:
+    - Wait a frame after loading
+    - Try reloading the configuration
+    - Check the UI has refreshed properly
+  </Accordion>
+
+  <Accordion title="Generators or exporters missing after load">
+    - Verify the generator/exporter types are spelled correctly with proper tags (e.g., `!MIDIDMX`)
+    - Check that the referenced components are included in your HNode build
+    - Look for errors in the console about missing types
+  </Accordion>
+
+  <Accordion title="Manual edits break configuration">
+    When manually editing YAML:
+    - Maintain proper indentation (use spaces, not tabs)
+    - Keep the type tags (e.g., `!VRSL`) intact
+    - Ensure all required fields are present
+    - Validate YAML syntax with an online validator
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+- Configure [Spout I/O](/guides/spout-io) for texture input/output
+- Set up [MIDIDMX](/guides/mididmx) for VRChat integration
+- Learn about [OBS streaming](/guides/streaming) to use your saved configurations in live shows

@@ -1,0 +1,108 @@
+---
+title: 'StaticValue'
+description: 'Set a range of DMX channels to a constant value'
+---
+
+## Overview
+
+The `StaticValue` generator sets a range of DMX channels to a fixed value. This is useful for testing, setting default values, or creating static lighting states.
+
+## Properties
+
+<ParamField path="channelStart" type="DMXChannel" required>
+  The first channel in the range to set.
+  
+  Can be specified as:
+  - Global index: `0`, `512`, `1024`
+  - Universe.Channel: `1.1`, `3.15`
+  - Equation: `(2 * 512) + 5`
+</ParamField>
+
+<ParamField path="channelEnd" type="DMXChannel" required>
+  The last channel in the range (inclusive).
+</ParamField>
+
+<ParamField path="value" type="EquationNumber" default="0">
+  The DMX value to set (0-255).
+  
+  Supports equations: `255`, `128`, `(255 / 2)`
+</ParamField>
+
+## Implementation
+
+From ~/workspace/source/Assets/Plugin/Generators/GeneratorStaticValue.cs:18-27:
+
+```csharp
+public virtual void GenerateDMX(ref List<byte> dmxData)
+{
+    dmxData.EnsureCapacity(channelStart + (channelEnd - channelStart) + 1);
+
+    //we need to write to the dmx data list directly
+    for (int i = channelStart; i < channelEnd + 1; i++)
+    {
+        dmxData[i] = (byte)value;
+    }
+}
+```
+
+## Configuration Example
+
+```yaml
+generators:
+  # Set channels 1-512 (Universe 1) to full brightness
+  - !StaticValue
+    channelStart: 0
+    channelEnd: 511
+    value: 255
+  
+  # Set channels 513-520 to half brightness using universe notation
+  - !StaticValue
+    channelStart: 2.1  # Universe 2, Channel 1
+    channelEnd: 2.8    # Universe 2, Channel 8
+    value: 128
+```
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Testing Serializers">
+    Set all channels to a known value to verify your serializer is working correctly:
+    
+    ```yaml
+    generators:
+      - !StaticValue
+        channelStart: 0
+        channelEnd: 1535  # 3 universes
+        value: 200
+    ```
+  </Accordion>
+  
+  <Accordion title="Default Lighting State">
+    Provide a base lighting level before other generators or ArtNet data takes over:
+    
+    ```yaml
+    generators:
+      - !StaticValue
+        channelStart: 1.1
+        channelEnd: 1.64
+        value: 50  # Dimmed default state
+    ```
+  </Accordion>
+  
+  <Accordion title="Blackout">
+    Force all channels to zero:
+    
+    ```yaml
+    generators:
+      - !StaticValue
+        channelStart: 0
+        channelEnd: 10000
+        value: 0
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Related
+
+- [Fade Generator](/api/generators/fade) - For time-based fading effects
+- [Remap Generator](/api/generators/remap) - For value transformations

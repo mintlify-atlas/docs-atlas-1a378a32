@@ -1,0 +1,77 @@
+---
+title: 'Remap'
+description: 'Remap and transform DMX channel values'
+---
+
+## Overview
+
+The `Remap` generator copies data from source channels to destination channels with optional value transformations and multipliers.
+
+## Properties
+
+<ParamField path="channelStart" type="DMXChannel" required>
+  First source channel to read from.
+</ParamField>
+
+<ParamField path="channelEnd" type="DMXChannel" required>
+  Last source channel to read from (inclusive).
+</ParamField>
+
+<ParamField path="destinationChannelStart" type="DMXChannel" required>
+  First destination channel to write to.
+</ParamField>
+
+<ParamField path="multiplier" type="float" default="1.0">
+  Value multiplier applied during remapping (e.g., 0.5 for half brightness).
+</ParamField>
+
+## Configuration Example
+
+```yaml
+generators:
+  # Copy universe 1 to universe 2 at half brightness
+  - !Remap
+    channelStart: 1.1
+    channelEnd: 1.512
+    destinationChannelStart: 2.1
+    multiplier: 0.5
+  
+  # Mirror channels 1-10 to channels 11-20
+  - !Remap
+    channelStart: 0
+    channelEnd: 9
+    destinationChannelStart: 10
+    multiplier: 1.0
+```
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Universe Duplication">
+    Send the same data to multiple universes:
+    
+    ```yaml
+    - !Remap
+      channelStart: 1.1
+      channelEnd: 1.512
+      destinationChannelStart: 3.1
+      multiplier: 1.0
+    ```
+  </Accordion>
+  
+  <Accordion title="Brightness Scaling">
+    Scale brightness across a range:
+    
+    ```yaml
+    - !Remap
+      channelStart: 1.1
+      channelEnd: 1.16
+      destinationChannelStart: 1.1
+      multiplier: 0.75  # 75% brightness
+    ```
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+The `RemapOnDemand` generator provides similar functionality with additional on-demand triggering via UI.
+</Note>
